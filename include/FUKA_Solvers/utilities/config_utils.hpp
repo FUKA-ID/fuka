@@ -1,6 +1,7 @@
 #pragma once
 #include "Configurator/config_bco.hpp"
 #include "Configurator/config_binary.hpp"
+#include "bco_utilities.hpp"
 #include "simple_calculations.hpp"
 
 namespace Kadath::FUKA_Solvers {
@@ -41,6 +42,21 @@ inline void initialize_binary_inspiral_config(config_t& bconfig,
     // delete ADOT, this can always be recalculated during
     // the eccentricity reduction stage
     bconfig.reset(BIN_PARAMS::ADOT);
+}
+
+template <class config_t>
+inline void set_MIN_SHELL_DR_binary(config_t& bconfig, double M1, double M2) {
+    using namespace ::Kadath::bco_utils;
+    using namespace ::Kadath::FUKA_Config;
+    if (M1 > M2)
+        std::swap(M1, M2);
+    bconfig.set(BIN_PARAMS::Q) = M2 / M1;
+
+    const double q = bconfig(BIN_PARAMS::Q);
+    bconfig.set(BCO_PARAMS::MIN_SHELL_DR, NODES::BCO1) =
+        1.7 * std::pow(2.0, shell_factor / q);
+    bconfig.set(BCO_PARAMS::MIN_SHELL_DR, NODES::BCO2) =
+        1.7 * std::pow(2.0, shell_factor / q);
 }
 
 }  // namespace Kadath::FUKA_Solvers
