@@ -610,7 +610,7 @@ class BCO_NS_INFO : public BCO_INFO {
         // start - set NS stages in config file
         bconfig.set_stage(STAGES::PRE) = false;
         bconfig.set_stage(STAGES::NOROT_BC) = true;
-        bconfig.set_stage(STAGES::TOTAL_BC) = true;
+        bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
         // end   - set NS stages
 
         // start - set NS fields in config file
@@ -649,7 +649,7 @@ class BCO_NS_INFO : public BCO_INFO {
 
         // start - set NS stages in config file
         bconfig.set_stage(STAGES::NOROT_BC) = true;
-        bconfig.set_stage(STAGES::TOTAL_BC) = true;
+        bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
         // end   - set NS stages
     }
 };
