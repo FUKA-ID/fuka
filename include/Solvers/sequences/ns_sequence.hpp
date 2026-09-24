@@ -10,23 +10,23 @@
  * \ingroup FUKA
  * @{*/
 using namespace ::Kadath::FUKA_Config;
-using seq_t = Kadath::FUKA_Solvers::Parameter_sequence<BCO_PARAMS>;
+using ns_seq_t = Kadath::FUKA_Solvers::Parameter_sequence<BCO_PARAMS>;
 
 namespace Kadath::FUKA_Solvers {
 
 class ns_sequence;
 std::ostream& operator<<(std::ostream&, const ns_sequence&);
 
-class ns_sequence : public seq_t {
+class ns_sequence : public ns_seq_t {
    protected:
-    BCO_PARAMS mass_fixing_idx{BCO_PARAMS::MADM};
+    std::tuple<BCO_PARAMS> mass_fixing_idx{BCO_PARAMS::MADM};
     double mass_fixing_val{std::nan("1")};
 
-    BCO_PARAMS spin_fixing_idx{BCO_PARAMS::CHI};
+    std::tuple<BCO_PARAMS> spin_fixing_idx{BCO_PARAMS::CHI};
     double spin_fixing_val{std::nan("1")};
 
    public:
-    ns_sequence() : seq_t() {}
+    ns_sequence() : ns_seq_t() {}
 
     /**
    * @brief Construct a new Parameter_sequence object from a string and tuple
@@ -36,7 +36,7 @@ class ns_sequence : public seq_t {
    * @param _t Tuple containing Config indicies for the desired parameter
    */
     ns_sequence(std::string _str, std::tuple<BCO_PARAMS> _t)
-        : seq_t(_str, _t) {}
+        : ns_seq_t(_str, _t) {}
 
     /**
    * @brief Construct a new Parameter_sequence object from a string and a pack
@@ -45,29 +45,41 @@ class ns_sequence : public seq_t {
    * @param _str Input parameter string
    * @param _ts Parameter pack consisting of the desired Config indices
    */
-    ns_sequence(std::string _str, BCO_PARAMS _ts) : seq_t(_str, _ts) {}
+    ns_sequence(std::string _str, BCO_PARAMS _ts) : ns_seq_t(_str, _ts) {}
 
-    ns_sequence(seq_t const& seq) : seq_t(seq) {}
+    ns_sequence(ns_seq_t const& seq) : ns_seq_t(seq) {}
 
     ns_sequence(ns_sequence const& seq) = default;
 
     // Getters
     double const& mass_val() const { return mass_fixing_val; }
 
-    BCO_PARAMS const& mass_idx() const { return mass_fixing_idx; }
+    std::tuple<BCO_PARAMS> const& get_mass_fixing_idx() const {
+        return mass_fixing_idx;
+    }
+
+    BCO_PARAMS const& mass_idx() const { return std::get<0>(mass_fixing_idx); }
 
     double const& spin_val() const { return spin_fixing_val; }
 
-    BCO_PARAMS const& spin_idx() const { return spin_fixing_idx; }
+    BCO_PARAMS const& spin_idx() const { return std::get<0>(spin_fixing_idx); }
+
+    std::tuple<BCO_PARAMS> const& get_spin_fixing_idx() const {
+        return spin_fixing_idx;
+    }
 
     // Setters
     void set_mass_val(double const& _val) { mass_fixing_val = _val; }
 
-    void set_mass_idx(BCO_PARAMS const& _val) { mass_fixing_idx = _val; }
+    void set_mass_idx(BCO_PARAMS const& _val) {
+        std::get<0>(mass_fixing_idx) = _val;
+    }
 
     void set_spin_val(double const& _val) { spin_fixing_val = _val; }
 
-    void set_spin_idx(BCO_PARAMS const& _val) { spin_fixing_idx = _val; }
+    void set_spin_idx(BCO_PARAMS const& _val) {
+        std::get<0>(spin_fixing_idx) = _val;
+    }
 
     bool is_mass_set() const { return !std::isnan(mass_fixing_val); }
 
@@ -75,13 +87,15 @@ class ns_sequence : public seq_t {
 
     std::string mass_str() const {
         auto [mass_key, mass_idx] =
-            get_key_val_pair_from_val(MBCO_PARAMS, mass_fixing_idx);
+            get_key_val_pair_from_val(MBCO_PARAMS,
+                                      std::get<0>(mass_fixing_idx));
         return mass_key;
     }
 
     std::string spin_str() const {
         auto [spin_key, spin_idx] =
-            get_key_val_pair_from_val(MBCO_PARAMS, spin_fixing_idx);
+            get_key_val_pair_from_val(MBCO_PARAMS,
+                                      std::get<0>(spin_fixing_idx));
         return spin_key;
     }
 
@@ -169,8 +183,7 @@ inline ns_sequence find_ns_sequence(Tree const& tree) {
     return seq;
 }
 
-template <class seq_t>
-inline bool ns_seq_is_mass_fixing(seq_t& seq) {
+inline bool ns_seq_is_mass_fixing(ns_seq_t const& seq) {
     auto seq_indicies = seq.get_indices();
     auto seq_idx = std::get<0>(seq_indicies);
     bool is_mass_fixing{false};
@@ -187,8 +200,7 @@ inline bool ns_seq_is_mass_fixing(seq_t& seq) {
     return is_mass_fixing;
 }
 
-template <class seq_t>
-inline bool ns_seq_is_spin_fixing(seq_t& seq) {
+inline bool ns_seq_is_spin_fixing(ns_seq_t const& seq) {
     if (!seq.is_set())
         return false;
     auto seq_indicies = seq.get_indices();
@@ -294,11 +306,12 @@ inline void verify_ns_fixing_values(config_t& bconfig, ns_sequence& seq) {
     }
 }
 
-template <class config_t>
+template <class config_t, typename... idx_t>
 inline void initialize_config_from_fixing_values(config_t& bconfig,
-                                                 ns_sequence const& seq) {
-    bconfig.set(seq.mass_idx()) = seq.mass_val();
-    bconfig.set(seq.spin_idx()) = seq.spin_val();
+                                                 ns_sequence const& seq,
+                                                 idx_t... BCOidx) {
+    bconfig.set(seq.mass_idx(), BCOidx...) = seq.mass_val();
+    bconfig.set(seq.spin_idx(), BCOidx...) = seq.spin_val();
 }
 
 /** @}*/
