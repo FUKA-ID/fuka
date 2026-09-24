@@ -1,25 +1,26 @@
 #include "FUKA_Solvers/utilities/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver_utilities.hpp"
 #include "Solvers/fuka_syst/fuka_syst_setup.hpp"
-#include "utilities/solver_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
 // NOROT Routines
 template <class eos_t>
-NS_XCTS_UNIFORM_ROT<eos_t>::NS_XCTS_UNIFORM_ROT(
+NS_XCTS_DIFF_ROT<eos_t>::NS_XCTS_DIFF_ROT(
     NS_XCTS_BASE::base_config_t* config_,
     ns_sequence const& seq_,
     Parameter_sequence<BCO_PARAMS> const& res_,
     std::string outputdir_,
     int const rank_)
     : NS_XCTS_BASE(config_, seq_, res_, outputdir_, rank_), spinup(nullptr) {
-    stagename = "UNIFORM_ROT";
-    solver_stage = ::Kadath::FUKA_Config::STAGES::UNIFORM_ROT;
+    stagename = "DIFF_ROT";
+    solver_stage = ::Kadath::FUKA_Config::STAGES::DIFF_ROT;
     if (!seq->is_set() && !bconfig->control(CONTROLS::SEQUENCES)) {
         initialize_config_from_fixing_values(*bconfig, *seq);
     }
     load_solution_from_file();
     initialize_EOS(*this);
     initialize_support_containers();
+    initialize_diffrot_params();
     initialize_spinup();
 
     if (rank == 0) {
@@ -29,7 +30,7 @@ NS_XCTS_UNIFORM_ROT<eos_t>::NS_XCTS_UNIFORM_ROT(
 }
 
 template <class eos_t>
-std::string NS_XCTS_UNIFORM_ROT<eos_t>::converged_filename(
+std::string NS_XCTS_DIFF_ROT<eos_t>::converged_filename(
     const std::string stage) const {
     // FIXME assumes a fix resolution for all domains
     auto res = space->get_domain(0)->get_nbr_points()(0);
@@ -40,7 +41,7 @@ std::string NS_XCTS_UNIFORM_ROT<eos_t>::converged_filename(
         ss << "_" << stage << ".";
     else
         ss << ".";
-    ss << eosname << ".";
+    ss << eosname << "." << law << ".";
 
     // Add mass fixing parameter to filename
     auto default_idx = BCO_PARAMS::MADM;
@@ -52,13 +53,13 @@ std::string NS_XCTS_UNIFORM_ROT<eos_t>::converged_filename(
         ss << seq_key << "." << (*bconfig)(default_idx) << ".";
     }
 
-    default_idx = BCO_PARAMS::CHI;
-    if (seq) {
-        update_filename_from_spin_fixing(*bconfig, seq, ss);
-    } else {
-        auto [seq_key, tidx] =
-            get_key_val_pair_from_val(MBCO_PARAMS, default_idx);
-        ss << seq_key << "." << (*bconfig)(default_idx) << ".";
+    if (law == "keh") {
+        ss << "Ar."
+           << (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_ARATIO)
+           << "."
+           << "Rr."
+           << (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_RRATIO)
+           << ".";
     }
     ss << (*bconfig)(BCO_PARAMS::NSHELLS) << "." << std::setfill('0')
        << std::setw(2) << res;
@@ -66,9 +67,8 @@ std::string NS_XCTS_UNIFORM_ROT<eos_t>::converged_filename(
 }
 
 template <class eos_t>
-void NS_XCTS_UNIFORM_ROT<eos_t>::setup_syst() {
+void NS_XCTS_DIFF_ROT<eos_t>::setup_syst() {
     int exit_status = EXIT_SUCCESS;
-    double loghc = std::log((*bconfig)(BCO_PARAMS::HC));
 
     // We use `config_filename()` vs `config_filename_abs()` since
     // `solution_exists` will probe the HOME_KADATH/COs directory
@@ -81,55 +81,86 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::setup_syst() {
     //     EXIT_SUCCESS : RELOAD_FILE;
     // }
 
+    initialize_diffrot_params();
+    // Update vector fields
     update_fields_co(*cfields, *coord_vectors, {}, 0.);
+
+    // Initialize KEH parameters
+    auto adpt_dom = space->get_domain(1);
+    double R0 = adpt_dom->get_radius()(*pos_eq);
+    double Rp = adpt_dom->get_radius()(*pos_pole);
+
+    auto& diffAratio = diffrot_params[DIFFROT_PARAMS::DIFF_ARATIO];
+    auto& diffRratio = diffrot_params[DIFFROT_PARAMS::DIFF_RRATIO];
+    diffA = diffrot_params[DIFFROT_PARAMS::DIFF_ARATIO] * R0;
+    bconfig->set(BCO_PARAMS::RMID) = R0;
+    std::string firstint{
+        "firstint = (H + log(N) - log(W)) - 0.5 * j^2 / diffA^2"};
+
+    if (rank == 0) {
+        std::cout << "###################################" << std::endl
+                  << "Differential Rotating models (KEH)" << std::endl
+                  << firstint << std::endl
+                  << "Fixed A / R0: " << diffAratio << std::endl
+                  << "Fixed Rp / Re: " << diffRratio << std::endl
+                  << "Initial Rp/Re: " << Rp / R0 << "\n"
+                  << "Initial R0: " << R0 << std::endl
+                  << "###################################"
+                  << "\n\n";
+    }
+    // Setup System of equations
     syst.reset(new System_of_eqs(*space));
+    syst->add_var("H", *logh);
     syst_init();
 
+    // Setup mass fixing parameter
     std::string central_fixing_definition{"h - hc"};
-    std::string spin_fixing_definition{"integ(intJ) - chi * Madm * Madm = 0"};
-    std::string output_str_M{};
-    std::string output_str_Spin{};
-
     if (seq) {
-        central_fixing_definition =
-            ::Kadath::FUKA_Syst_tools::set_ns_mass_fixing(*syst, *bconfig, seq);
-        spin_fixing_definition =
-            ::Kadath::FUKA_Syst_tools::set_ns_spin_fixing(*syst, *bconfig, seq);
-
-        output_str_M =
-            ::Kadath::FUKA_Syst_tools::get_ns_mass_fixing_output(*bconfig, seq);
-        output_str_Spin =
-            ::Kadath::FUKA_Syst_tools::get_ns_spin_fixing_output(*bconfig, seq);
+        using namespace Kadath::FUKA_Syst_tools;
+        central_fixing_definition = set_ns_mass_fixing(*syst, *bconfig, seq);
     } else {
-        syst->add_var("Hc", (*bconfig)(BCO_PARAMS::HC));
-        syst->add_cst("chi", (*bconfig)(BCO_PARAMS::CHI));
-        syst->add_var("ome", (*bconfig)(BCO_PARAMS::OMEGA));
-        syst->add_cst("Madm", (*bconfig)(BCO_PARAMS::MADM));
-        output_str_M = "Mass fixed using ADM mass (madm)";
-        output_str_Spin = "Spin fixed using dimensionless spin parameter (chi)";
+        syst->add_cst("hc", (*bconfig)(BCO_PARAMS::HC));
     }
-    syst->add_def("omega^i = bet^i + ome * mg^i");
+
+    // Utility field
+    syst->add_cst("one", *ones);
+
+    // KEH Constants
+    syst->add_cst("diffAratio", diffrot_params[DIFFROT_PARAMS::DIFF_ARATIO]);
+    syst->add_cst("Rratio", diffrot_params[DIFFROT_PARAMS::DIFF_RRATIO]);
+
+    // KEH vars
+    syst->add_var("diffA", diffA);
+    syst->add_var("omec", (*bconfig)(BCO_PARAMS::OMEGA));
+    syst->add_var("R0", (*bconfig)(BCO_PARAMS::RMID));
+    syst->add_var("Omega", *diff_omega);
+
+    // KEH Definitions
+    syst->add_def("diffAField = one * diffA");
+    syst->add_def("r = multr(one)");
+
+    syst->add_def("omega^i = bet^i + Omega * mg^i");
+    syst->add_def("U^i = omega^i / N");
+    syst->add_def("Usquare = P^4 * U_i * U^i");
+    syst->add_def("Wsquare = 1. / (1. - Usquare)");
+    syst->add_def("W = sqrt(Wsquare)");
+    syst->add_def("j = P^4 * Wsquare * f_ij * U^i * mg^j / N");
+    syst->add_def("omelaw = omec - j / diffA^2");
 
     for (int d = 0; d < ndom; d++) {
         if (d <= 1) {
-            syst->add_def(d, "U^i = omega^i / N");
-            syst->add_def(d, "Usquare = P^4 * U_i * U^i");
-            syst->add_def(d, "Wsquare = 1. / (1. - Usquare)");
-            syst->add_def(d, "W = sqrt(Wsquare)");
-
             syst->add_def(d, "Etilde = press * h * Wsquare - press * delta");
             syst->add_def(d,
                           "Stilde = 3 * press * delta + (Etilde + press * "
                           "delta) * Usquare");
             syst->add_def(d, "ptilde^i = press * h * Wsquare * U^i");
 
-            syst->add_def(
-                d,
-                "eqP    = delta * D^i D_i P + A_ij * A^ij / P^7 / 8 * "
-                "delta + 4piG / "
-                "2. * P^5 * Etilde");
             syst->add_def(d,
-                          "eqNP   = delta * D^i D_i NP - 7. / 8. * NP / P^8 * "
+                          "eqP = delta * D^i D_i P + A_ij * A^ij / P^7 / 8 * "
+                          "delta + 4piG / "
+                          "2. * P^5 * Etilde");
+            syst->add_def(d,
+                          "eqNP = delta * D^i D_i NP - 7. / 8. * NP / P^8 * "
                           "delta * A_ij *A^ij "
                           "- 4piG / 2. * N * P^5 * (Etilde + 2. * Stilde)");
             syst->add_def(
@@ -139,9 +170,10 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::setup_syst() {
                 "ptilde^i");
 
             syst->add_def(d, "intMb = P^6 * rho(h) * W");
-            syst->add_def(d, "firstint = H + log(N) - log(W)");
-
+            syst->add_def(d, firstint.c_str());
+            syst->add_eq_full(d, "Omega - omelaw = 0");
         } else {
+            // outside the matter is absent and the sources are zero
             syst->add_eq_full(d, "H = 0");
 
             syst->add_def(d, "eqP = D^i D_i P + A_ij * A^ij / P^7 / 8");
@@ -153,17 +185,21 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::setup_syst() {
                           "A^ij * D_j Ntilde");
         }
     }
+    // Ensure Omega field matches the interior solution, but is zero otherwise.
+    // Much more reliable convergence
+    syst->add_eq_matching(2, INNER_BC, "Omega");
+    syst->add_eq_matching(2, INNER_BC, "dn(Omega)");
+    syst->add_eq_inside(2, "Omega = 0");
+    syst->add_eq_full(3, "Omega = 0");
 
-    if (rank == 0) {
-        std::cout << "############################" << std::endl
-                  << "Uniformly Rotating NS Solver" << std::endl
-                  << output_str_M << std::endl
-                  << output_str_Spin << std::endl
-                  << "############################" << std::endl;
-    }
+    // Enforce Differential rotation parameters at the origin,
+    // equator, and pole.
+    syst->add_eq_val(0, "diffAField/R0 - diffAratio", *pos_origin);
+    syst->add_eq_val(1, "r/R0 - 1", *pos_eq);
+    syst->add_eq_val(1, "r/R0 - Rratio", *pos_pole);
 
-    // add the constraint equations and demand continuity their normal derivative
-    // across domain boundaries
+    // add the constraint equations and demand continuity
+    // of their normal derivative across domain boundaries
     space->add_eq(*syst, "eqNP= 0", "N", "dn(N)");
     space->add_eq(*syst, "eqP = 0", "P", "dn(P)");
     space->add_eq(*syst, "eqbet^i= 0", "bet^i", "dn(bet^i)");
@@ -199,34 +235,11 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::setup_syst() {
             default:
                 break;
         }
-        idx = seq->spin_idx();
-        switch (idx) {
-            case BCO_PARAMS::JADM:
-                space->add_eq_int_inf(*syst, spin_fixing_definition.c_str());
-                break;
-            case BCO_PARAMS::CHI:
-                // Since we need MADM to compute CHI, we need to ensure
-                // that if it isn't a fixed quantity that it becomes a
-                // variable in our system of equations and the appropriate
-                // constraint equation is added
-                if (add_Madm_int) {
-                    syst->add_var("Madm", (*bconfig)(BCO_PARAMS::MADM));
-                    space->add_eq_int_inf(*syst, "integ(intMadm) = Madm");
-                }
-
-                space->add_eq_int_inf(*syst, spin_fixing_definition.c_str());
-                break;
-            default:
-                break;
-        }
-    } else {
-        space->add_eq_int_inf(*syst, spin_fixing_definition.c_str());
-        space->add_eq_int_inf(*syst, "integ(intMadm) = Madm");
     }
 }
 
 template <class eos_t>
-void NS_XCTS_UNIFORM_ROT<eos_t>::syst_init() {
+void NS_XCTS_DIFF_ROT<eos_t>::syst_init() {
     using namespace ::Kadath::Margherita;
 
     // call the (flat) conformal metric "f"
@@ -243,7 +256,6 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::syst_init() {
     // the basic fields, conformal factor, lapse and (log) enthalpy
     syst->add_var("P", *conformal_factor);
     syst->add_var("N", *lapse);
-    syst->add_var("H", *logh);
     syst->add_var("bet", *shift);
 
     // define common combinations of conformal factor and lapse
@@ -286,8 +298,8 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::syst_init() {
 }
 
 template <class eos_t>
-void NS_XCTS_UNIFORM_ROT<eos_t>::print_diagnostics(const int ite,
-                                                   const double conv) const {
+void NS_XCTS_DIFF_ROT<eos_t>::print_diagnostics(const int ite,
+                                                const double conv) const {
     // compute the baryonic mass at volume integral from the given integrant
     double baryonic_mass = syst->give_val_def("intMb")()(0).integ_volume() +
                            syst->give_val_def("intMb")()(1).integ_volume();
@@ -322,21 +334,19 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::print_diagnostics(const int ite,
               << std::abs(Madm - Madmalt) / Madm << "]" << std::endl
               << FORMAT << "Mk: " << Mk << " [" << std::abs(Madm - Mk) / Madm
               << "]" << std::endl
-              << FORMAT << "R: " << rs[0] << " " << rs[1] << std::endl;
+              << FORMAT << "R: " << rs[0] << " " << rs[1] << " ["
+              << rs[0] / rs[1] << "]" << std::endl;
     std::cout << FORMAT << "Jadm: " << J << std::endl
-              << FORMAT << "Chi: " << J / Madm / Madm << " [" << (*bconfig)(CHI)
-              << "]\n"
-              << FORMAT << "Omega: " << (*bconfig)(OMEGA) << std::endl;
+              << FORMAT << "Chi: " << J / Madm / Madm << " ["
+              << bconfig->set(BCO_PARAMS::CHI) << "]\n"
+              << FORMAT << "Omega: " << (*bconfig)(OMEGA) << std::endl
+              << FORMAT << "diff_A: " << diffA << std::endl;
     std::cout.flags(f);
-#undef FORMAT
     std::cout << "=======================================" << "\n\n";
 }  // end print diagnostics norot
 
 template <class eos_t>
-void NS_XCTS_UNIFORM_ROT<eos_t>::update_config_quantities() {
-    auto rs = bco_utils::get_rmin_rmax(*space, 1);
-    bconfig->set(BCO_PARAMS::RMID) = rs[0];
-
+void NS_XCTS_DIFF_ROT<eos_t>::update_config_quantities() {
     // compute the ADM mass as surface integral at infinity
     Val_domain integMadm(syst->give_val_def("intMadm")()(ndom - 1));
     double Madm = space->get_domain(ndom - 1)->integ(integMadm, OUTER_BC);
@@ -367,29 +377,18 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::update_config_quantities() {
                 bconfig->set(BCO_PARAMS::MB) = baryonic_mass;
                 break;
             case BCO_PARAMS::MB:
-                bconfig->set(BCO_PARAMS::HC) = std::exp(loghc);
                 bconfig->set(BCO_PARAMS::NC) =
                     EOS<eos_t, DENSITY>::get(bconfig->set(BCO_PARAMS::HC));
                 bconfig->set(BCO_PARAMS::MADM) = Madm;
                 break;
             default:
-                bconfig->set(BCO_PARAMS::HC) = std::exp(loghc);
                 bconfig->set(BCO_PARAMS::NC) =
                     EOS<eos_t, DENSITY>::get(bconfig->set(BCO_PARAMS::HC));
                 bconfig->set(BCO_PARAMS::MB) = baryonic_mass;
                 break;
         }
-
-        idx = seq->spin_idx();
-        switch (idx) {
-            case BCO_PARAMS::CHI:
-                break;
-            default:
-                bconfig->set(BCO_PARAMS::CHI) = chi;
-                break;
-        }
+        bconfig->set(BCO_PARAMS::CHI) = chi;
     } else {
-        bconfig->set(BCO_PARAMS::HC) = std::exp(loghc);
         bconfig->set(BCO_PARAMS::NC) =
             EOS<eos_t, DENSITY>::get(bconfig->set(BCO_PARAMS::HC));
         bconfig->set(BCO_PARAMS::MB) = baryonic_mass;
@@ -399,58 +398,99 @@ void NS_XCTS_UNIFORM_ROT<eos_t>::update_config_quantities() {
 }
 
 template <class eos_t>
-void NS_XCTS_UNIFORM_ROT<eos_t>::initialize_spinup() {
-    auto const spinidx = seq->spin_idx();
-    auto finalspin = (*bconfig)(spinidx);
-
-    // No need to spinup if we're computing a sequence of
-    // spinning NS starting from ~zero
-    if ((ns_seq_is_spin_fixing(*seq) && std::fabs(seq->init()) < 1e-2) ||
-        ((seq->spin_idx() == BCO_PARAMS::CHI) &&
-         (std::fabs(seq->spin_val()) < 0.2))) {
-        return;
-    } else if (ns_seq_is_spin_fixing(*seq)) {
-        finalspin = seq->init();
-    }
-
-    auto npts = space->get_domain(1)->get_nbr_points();
-    Index pos_eq(npts);
-    pos_eq.set(0) = npts(0) - 1;  /// Set to outer radius
-    pos_eq.set(1) = npts(1) - 1;  /// Set theta to be on the xy plane.
-
-    Index pos_pole(npts);
-    pos_pole.set(0) = npts(0) - 1;  /// Set to outer radius
-
+void NS_XCTS_DIFF_ROT<eos_t>::initialize_spinup() {
     auto adpt_dom = space->get_domain(1);
-    double const R0 = adpt_dom->get_radius()(pos_eq);
-    double const Rp = adpt_dom->get_radius()(pos_pole);
-    double const axis_ratio = Rp / R0;
+    double const R0 = adpt_dom->get_radius()(*pos_eq);
+    double const Rp = adpt_dom->get_radius()(*pos_pole);
+    axis_ratio = Rp / R0;
+    double const diffRratio = diffrot_params[DIFFROT_PARAMS::DIFF_RRATIO];
 
     // no reason to spinup if the solution is already sufficiently rotating
-    if (1. - axis_ratio > 1e-3) {
+    if ((diffRratio < 0.7) || (1. - axis_ratio / diffRratio > 0)) {
         return;
     }
+    return;
     spinup.reset(
-        new Parameter_sequence<BCO_PARAMS>(seq->spin_str(), seq->spin_idx()));
-    spinup->set(0., 0., finalspin);
-    spinup->set_N(3);
-    bconfig->set(spinidx) = 0.;
+        new Parameter_sequence<DIFFROT_PARAMS>("R_ratio",
+                                               DIFFROT_PARAMS::DIFF_RRATIO));
+    spinup->set(0.7, 0.7, diffRratio);
+    auto const spinidx = std::get<0>(spinup->get_indices());
+    const double dx = 0.05;
+    const int N = std::ceil((axis_ratio - diffRratio) / dx) + 1;
+    spinup->set_N(N);
+    diffrot_params[spinidx] = axis_ratio - 1e-6;
+    bconfig->set_diffrot(spinidx) = diffrot_params[spinidx];
+    if (rank == 0)
+        cout << *spinup << endl;
 }
 
 template <class eos_t>
-bool NS_XCTS_UNIFORM_ROT<eos_t>::increment_spin() {
-    if (!spinup || !spinup->is_set() || !spinup->is_varying()) {
+bool NS_XCTS_DIFF_ROT<eos_t>::increment_spin() {
+    if (!spinup || !spinup->is_set() || !spinup->is_varying())
         return false;
-    }
     auto sequence_var_indices = spinup->get_indices();
     auto const& dx = spinup->step_size();
-    auto x = bconfig->set(sequence_var_indices);
+    double const diffRratio =
+        (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_RRATIO);
+    auto x = diffRratio;
     if (spinup->loop_condition(x)) {
         x += dx;
         x = (std::fabs(1. - x / spinup->final()) < 1e-4) ? spinup->final() : x;
-        bconfig->set(sequence_var_indices) = x;
+        bconfig->set_diffrot(sequence_var_indices) = x;
         return true;
     }
     return false;
+}
+
+template <class eos_t>
+void NS_XCTS_DIFF_ROT<eos_t>::initialize_diffrot_params() {
+    law = [&]() -> std::string {
+        auto v =
+            (*bconfig).template diffrot<std::string>(DIFFROT_PARAMS::DIFF_LAW);
+        return str_tolower(v);
+    }();
+    if (law == "keh") {
+        diffrot_params.fill(false);
+        diffrot_params[DIFFROT_PARAMS::DIFF_ARATIO] =
+            (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_ARATIO);
+        diffrot_params[DIFFROT_PARAMS::DIFF_RRATIO] =
+            (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_RRATIO);
+    }
+    pos_origin.reset(new Index(space->get_domain(0)->get_nbr_points()));
+    auto npts = space->get_domain(1)->get_nbr_points();
+    pos_eq.reset(new Index(npts));
+    pos_eq->set(0) = npts(0) - 1;  /// Set to outer radius
+    pos_eq->set(1) = npts(1) - 1;  /// Set theta to be on the xy plane.
+
+    pos_pole.reset(new Index(npts));
+    pos_pole->set(0) = npts(0) - 1;  /// Set to outer radius
+
+    ones.reset(new Scalar(*space));
+    *ones = 1.;
+    ones->std_base();
+}
+
+template <class eos_t>
+void NS_XCTS_DIFF_ROT<eos_t>::reset_all_ptrs() {
+    // Fields
+    conformal_factor.reset(nullptr);
+    lapse.reset(nullptr);
+    shift.reset(nullptr);
+    logh.reset(nullptr);
+    diff_omega.reset(nullptr);
+
+    // Containers
+    basis.reset(nullptr);
+    fmet.reset(nullptr);
+    syst.reset(nullptr);
+    cfields.reset(nullptr);
+    coord_vectors.reset(nullptr);
+    ones.reset(nullptr);
+    pos_origin.reset(nullptr);
+    pos_eq.reset(nullptr);
+    pos_pole.reset(nullptr);
+
+    // Space
+    space.reset(nullptr);
 }
 }  // namespace Kadath::FUKA_Solvers

@@ -1,6 +1,6 @@
 #include "FUKA_Solvers/utilities/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver_utilities.hpp"
 #include "Solvers/fuka_syst/fuka_syst_setup.hpp"
-#include "utilities/solver_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
 // NOROT Routines
@@ -72,6 +72,7 @@ void NS_XCTS_NOROT<eos_t>::setup_syst() {
 
     update_fields_co(*cfields, *coord_vectors, {}, 0.);
     syst.reset(new System_of_eqs(*space));
+    syst->add_var("H", *logh);
     syst_init();
     for (int d = 0; d < ndom; d++) {
         if (d <= 1) {
@@ -176,7 +177,6 @@ void NS_XCTS_NOROT<eos_t>::syst_init() {
     // the basic fields, conformal factor, lapse and (log) enthalpy
     syst->add_var("P", *conformal_factor);
     syst->add_var("N", *lapse);
-    syst->add_var("H", *logh);
 
     // define common combinations of conformal factor and lapse
     syst->add_def("NP = P*N");
@@ -244,7 +244,6 @@ void NS_XCTS_NOROT<eos_t>::print_diagnostics(const int ite,
               << "]" << std::endl;
     std::cout << FORMAT << "R: " << rs[0] << " " << rs[1] << "\n";
     std::cout.flags(f);
-#undef FORMAT
     std::cout << "=======================================" << "\n\n";
 }  // end print diagnostics norot
 

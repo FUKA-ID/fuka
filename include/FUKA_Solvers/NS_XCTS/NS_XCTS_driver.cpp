@@ -9,7 +9,7 @@
 namespace Kadath::FUKA_Solvers {
 
 template <class eos_t>
-struct launch_ns_xcts_solver {
+struct launch_NS_XCTS_solver {
     template <class config_t>
     int operator()(const int rank,
                    config_t& bconfig,
@@ -45,6 +45,7 @@ struct launch_ns_xcts_solver {
                << "\n";
             throw std::runtime_error(ss.str().c_str());
         }
+        fclose(ff1);
         int exit_status = EXIT_SUCCESS;
         auto launch = [](auto& solver,
                          bool ignore_resinc = false,
@@ -145,12 +146,12 @@ struct launch_ns_xcts_solver {
     };
 };
 
-inline int ns_xcts_driver(NS_XCTS_BASE::base_config_t& bconfig,
+inline int NS_XCTS_driver(NS_XCTS_BASE::base_config_t& bconfig,
                           ns_sequence const& seq,
                           Parameter_sequence<BCO_PARAMS>& resolution,
                           std::string outputdir);
 
-inline NS_XCTS_BASE::base_config_t ns_xcts_sequence_setup(
+inline NS_XCTS_BASE::base_config_t NS_XCTS_sequence_setup(
     NS_XCTS_BASE::base_config_t& seqconfig,
     std::string outputdir) {
     using config_t = NS_XCTS_BASE::base_config_t;
@@ -167,7 +168,7 @@ inline NS_XCTS_BASE::base_config_t ns_xcts_sequence_setup(
     return bconfig;
 }
 
-inline int ns_xcts_solver_driver(NS_XCTS_BASE::base_config_t& bconfig,
+inline int NS_XCTS_solver_driver(NS_XCTS_BASE::base_config_t& bconfig,
                                  ns_sequence const& seq,
                                  Parameter_sequence<BCO_PARAMS>& resolution,
                                  std::string outputdir) {
@@ -185,7 +186,7 @@ inline int ns_xcts_solver_driver(NS_XCTS_BASE::base_config_t& bconfig,
         bconfig.template eos<std::string>(EOS_PARAMS::EOSTYPE);
     using namespace Kadath::FUKA_EOS;
     exit_status =
-        EOS_Function_Dispatcher::dispatch<launch_ns_xcts_solver>(bconfig,
+        EOS_Function_Dispatcher::dispatch<launch_NS_XCTS_solver>(bconfig,
                                                                  eos_type,
                                                                  rank,
                                                                  bconfig,
@@ -197,7 +198,7 @@ inline int ns_xcts_solver_driver(NS_XCTS_BASE::base_config_t& bconfig,
     return exit_status;
 }
 
-int ns_xcts_seq_driver(NS_XCTS_BASE::base_config_t& seqconfig,
+int NS_XCTS_seq_driver(NS_XCTS_BASE::base_config_t& seqconfig,
                        ns_sequence const& seq,
                        Parameter_sequence<BCO_PARAMS>& resolution,
                        std::string const outputdir) {
@@ -213,7 +214,7 @@ int ns_xcts_seq_driver(NS_XCTS_BASE::base_config_t& seqconfig,
     auto resolution_indices = resolution.get_indices();
 
     // Initialize full configurator
-    config_t base_config = ns_xcts_sequence_setup(seqconfig, outputdir);
+    config_t base_config = NS_XCTS_sequence_setup(seqconfig, outputdir);
     base_config.set(resolution_indices) = resolution.init();
 
     // in the event the user wants an MADM > MTOV
@@ -277,7 +278,7 @@ int ns_xcts_seq_driver(NS_XCTS_BASE::base_config_t& seqconfig,
         ns_sequence tmp_seq(seq);
         tmp_seq.set(seq.default_val(), std::nan("1"), std::nan("1"));
 
-        ns_xcts_solver_driver(bconfig, tmp_seq, tmp_res, outputdir);
+        NS_XCTS_solver_driver(bconfig, tmp_seq, tmp_res, outputdir);
 
         // Update config such that the next solving round uses
         // the final ADM mass and spin
@@ -291,7 +292,7 @@ int ns_xcts_seq_driver(NS_XCTS_BASE::base_config_t& seqconfig,
     }
     // Get non-rotating solution for the given mass or TOV mass if
     // bconfig.control(CONTROLS::ITERATIVE_M)
-    ns_xcts_solver_driver(bconfig, seq, resolution, outputdir);
+    NS_XCTS_solver_driver(bconfig, seq, resolution, outputdir);
 
     seqconfig = bconfig;
 
@@ -316,14 +317,14 @@ inline int launch_final_stage_driver(NS_XCTS_BASE::base_config_t& bconfig,
     if (rank == 0)
         std::cout << "Last stage: " << last_stage << '\n';
     if (bconfig.control(CONTROLS::SEQUENCES)) {
-        final_stage_driver = &ns_xcts_seq_driver;
+        final_stage_driver = &NS_XCTS_seq_driver;
     } else {
-        final_stage_driver = &ns_xcts_solver_driver;
+        final_stage_driver = &NS_XCTS_solver_driver;
     }
     return final_stage_driver(bconfig, seq, resolution, outputdir);
 }
 
-inline int ns_xcts_driver(NS_XCTS_BASE::base_config_t& bconfig,
+inline int NS_XCTS_driver(NS_XCTS_BASE::base_config_t& bconfig,
                           ns_sequence const& seq,
                           Parameter_sequence<BCO_PARAMS>& resolution,
                           std::string outputdir) {
@@ -341,6 +342,103 @@ inline int ns_xcts_driver(NS_XCTS_BASE::base_config_t& bconfig,
     exit_status =
         launch_final_stage_driver(bconfig, seq, resolution, outputdir);
 
+    return exit_status;
+}
+
+template <class eos_t>
+struct launch_NS_XCTS_boost_solver {
+    template <class config_t>
+    int operator()(const int rank,
+                   config_t& bconfig,
+                   std::string outputdir,
+                   Parameter_sequence<BCO_PARAMS>& resolution,
+                   kadath_config_boost<BIN_INFO>& binary_config,
+                   ns_sequence const& seq) {
+
+        std::string spacein = bconfig.space_filename();
+
+        if (!fs::exists(spacein)) {
+            // mainly for debugging MPI bugs
+            if (rank == 0) {
+                std::cerr << "File: " << spacein << " not found.\n\n";
+            } else {
+                std::cerr << "File: " << spacein
+                          << " not found for another rank.\n\n";
+            }
+            std::_Exit(EXIT_FAILURE);
+        }
+
+        // just so you really know
+        if (rank == 0) {
+            std::cout << "Config File: " << bconfig.config_filename_abs()
+                      << std::endl
+                      << "Fields File: " << spacein << std::endl
+                      << bconfig << std::endl;
+        }
+        FILE* ff1 = fopen(spacein.c_str(), "r");
+        if (ff1 == NULL) {
+            // mainly for debugging MPI bugs
+            std::stringstream ss;
+            ss << spacein.c_str() << " failed to open for rank " << rank
+               << "\n";
+            throw std::runtime_error(ss.str().c_str());
+        }
+        fclose(ff1);
+
+        std::array<bool, NUM_STAGES> const stage_enabled =
+            bconfig.return_stages();
+        Boosted_NS_XCTS<eos_t> boosted_uniformrot_solver(&bconfig,
+                                                         seq,
+                                                         resolution,
+                                                         outputdir,
+                                                         &binary_config,
+                                                         rank);
+        boosted_uniformrot_solver.setup_syst();
+        return boosted_uniformrot_solver.do_newton();
+    };
+};
+
+template <typename config_t, class Res_t>
+inline int NS_XCTS_binary_boost_driver(config_t& bconfig,
+                                       Res_t& resolution,
+                                       std::string outputdir,
+                                       kadath_config_boost<BIN_INFO> binconfig,
+                                       const size_t bco) {
+    int exit_status = RUN_BOOST;
+    int rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    using namespace Kadath::FUKA_EOS;
+
+    const std::string eos_type =
+        bconfig.template eos<std::string>(EOS_PARAMS::EOSTYPE);
+
+    const int final_res = bconfig(BCO_PARAMS::BCO_RES);
+    bool res_inc = (bconfig.seq_setting(SEQ_SETTINGS::INIT_RES) < final_res);
+    bconfig.set(BCO_PARAMS::BCO_RES) = resolution.init();
+
+    // Obtain stationary solution
+    ns_sequence tmp_seq{};
+    verify_ns_fixing_values(bconfig, tmp_seq);
+    bconfig.set_stage(BIN_BOOST) = false;
+    exit_status = NS_XCTS_driver(bconfig, tmp_seq, resolution, outputdir);
+
+    bconfig.set_stage(BIN_BOOST) = true;
+    exit_status = RUN_BOOST;
+    // FIXME make sure only last stage is active?
+    // Used to manually disable norot here.
+    while (exit_status == RUN_BOOST) {
+        exit_status =
+            EOS_Function_Dispatcher::dispatch<launch_NS_XCTS_boost_solver>(
+                bconfig,
+                eos_type,
+                rank,
+                bconfig,
+                outputdir,
+                resolution,
+                binconfig,
+                tmp_seq);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
     return exit_status;
 }
 
