@@ -66,7 +66,9 @@ config_t binary_generate_sequence_config(config_t& seqconfig,
  * @return true
  * @return false
  */
-inline bool extract_seq(Tree& branch, std::string seqkey, double& storage);
+inline bool extract_seq(Tree const& branch,
+                        std::string seqkey,
+                        double& storage);
 
 /**
  * @brief Build a parameter sequence based on the input parameters parsed from

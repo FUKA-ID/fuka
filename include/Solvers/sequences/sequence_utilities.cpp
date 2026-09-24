@@ -137,7 +137,9 @@ void update_diffrot_parameters(src_config_t& seqconfig,
         bconfig.set_diffrot(idx, bco...) = seqconfig.set_diffrot(idx, bco...);
 }
 
-inline bool extract_seq(Tree& branch, std::string seqkey, double& storage) {
+inline bool extract_seq(Tree const& branch,
+                        std::string seqkey,
+                        double& storage) {
     auto [branch_name, key, val] = find_leaf(branch, seqkey);
     if (!key.empty()) {
         storage = std::stod(val);
@@ -325,10 +327,11 @@ template <class config_t, class seq_t>
 void update_filename_from_mass_fixing(config_t& bconfig,
                                       seq_t& seq,
                                       std::stringstream& ss) {
-    auto idx{seq->mass_idx()};
-    auto [seq_key, tidx] = get_key_val_pair_from_val(MBCO_PARAMS, idx);
+    auto idx{seq->get_mass_fixing_idx()};
+    auto [seq_key, tidx] =
+        get_key_val_pair_from_val(MBCO_PARAMS, std::get<0>(idx));
 
-    switch (idx) {
+    switch (tidx) {
         case BCO_PARAMS::HC:
         case BCO_PARAMS::NC:
         case BCO_PARAMS::MADM:
@@ -338,7 +341,7 @@ void update_filename_from_mass_fixing(config_t& bconfig,
         default:
             std::string msg{
                 "Sequence initialized, but not implemented for Mass index = " +
-                std::to_string(int(idx))};
+                std::to_string(int(tidx))};
             throw std::runtime_error(msg.c_str());
             break;
     }
