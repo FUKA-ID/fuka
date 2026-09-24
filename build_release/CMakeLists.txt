@@ -10,8 +10,6 @@ if (EXISTS $ENV{HOME_KADATH}/Cmake/CMakeLocal.cmake)
 	include($ENV{HOME_KADATH}/Cmake/CMakeLocal.cmake)
 endif()
 
-include($ENV{HOME_KADATH}/Cmake/CMake_FUKA_meta.cmake)
-
 #Parallel or sequential
 option(PAR_VERSION "Parallel version" ON)
 

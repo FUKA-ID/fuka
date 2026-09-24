@@ -7,6 +7,7 @@ endif()
 if(EXISTS $ENV{HOME_KADATH}/Cmake/CMakeLocal.cmake)
 	include ($ENV{HOME_KADATH}/Cmake/CMakeLocal.cmake)
 endif()
+include($ENV{HOME_KADATH}/Cmake/CMake_FUKA_meta.cmake)
 
 if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "No build type selected, default to Release")
