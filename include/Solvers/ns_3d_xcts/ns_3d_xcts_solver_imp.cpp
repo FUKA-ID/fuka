@@ -89,8 +89,10 @@ int ns_3d_xcts_solver<eos_t, config_t, space_t>::solve() {
     if (rank == 0)
         std::cout << "Last stage: " << last_stage << "\n";
 
-    // FIXME this will be resolved in future patch
-    double const final_chi = bconfig.seq_setting(SEQ_SETTINGS::FINAL_CHI);
+    double const final_chi =
+        (std::isnan(bconfig.seq_setting(SEQ_SETTINGS::FINAL_CHI))
+             ? bconfig(BCO_PARAMS::CHI)
+             : bconfig.seq_setting(SEQ_SETTINGS::FINAL_CHI));
     double const initial_chi = bconfig(BCO_PARAMS::CHI);
 
     if (stage_enabled[STAGES::NOROT_BC]) {
@@ -100,12 +102,12 @@ int ns_3d_xcts_solver<eos_t, config_t, space_t>::solve() {
         bconfig(BCO_PARAMS::CHI) = initial_chi;
     }
 
-    if (stage_enabled[STAGES::TOTAL_BC] && exit_status != RELOAD_FILE) {
-        this->solver_stage = STAGES::TOTAL_BC;
+    if (stage_enabled[STAGES::UNIFORM_ROT] && exit_status != RELOAD_FILE) {
+        this->solver_stage = STAGES::UNIFORM_ROT;
         if (bconfig.control(CONTROLS::ITERATIVE_CHI)) {
             exit_status = uniform_rot_stage();
             bconfig.control(CONTROLS::ITERATIVE_CHI) = false;
-            stage_enabled[STAGES::TOTAL_BC] = true;
+            stage_enabled[STAGES::UNIFORM_ROT] = true;
         }
 
         if (exit_status != RELOAD_FILE) {

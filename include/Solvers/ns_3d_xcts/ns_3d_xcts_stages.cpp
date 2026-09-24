@@ -196,7 +196,7 @@ int ns_3d_xcts_solver<eos_t, config_t, space_t>::uniform_rot_stage() {
     // We use `config_filename()` vs `config_filename_abs()` since
     // `solution_exists` will probe the HOME_KADATH/COs directory
     auto const current = bconfig.config_filename();
-    if (!bconfig.control(RESOLVE) && solution_exists("TOTAL_BC")) {
+    if (!bconfig.control(RESOLVE) && solution_exists("UNIFORM_ROT")) {
         if (rank == 0)
             std::cout << "Solved previously: " << bconfig.config_filename_abs()
                       << std::endl;
@@ -240,7 +240,7 @@ int ns_3d_xcts_solver<eos_t, config_t, space_t>::uniform_rot_stage() {
         syst.add_var("Hc", loghc);
         syst.add_cst("chi", bconfig(BCO_PARAMS::CHI));
         syst.add_var("ome", bconfig(BCO_PARAMS::OMEGA));
-        syst.add_var("Mb", bconfig(BCO_PARAMS::MB));
+        syst.add_cst("Mb", bconfig(BCO_PARAMS::MB));
         syst.add_cst("Madm", bconfig(BCO_PARAMS::MADM));
     }
 
@@ -374,7 +374,7 @@ int ns_3d_xcts_solver<eos_t, config_t, space_t>::uniform_rot_stage() {
         check_max_iter_exceeded(rank, ite, conv);
     }
 
-    bconfig.set_filename(converged_filename("TOTAL_BC"));
+    bconfig.set_filename(converged_filename("UNIFORM_ROT"));
     if (rank == 0) {
         checkpoint();
     }
@@ -418,8 +418,6 @@ int ns_3d_xcts_solver<eos_t, config_t, space_t>::binary_boost_stage(
     logh_const.std_base();
 
     double xo = 0.0;
-
-    double loghc1 = Kadath::bco_utils::get_boundary_val(0, logh, INNER_BC);
 
     if (rank == 0)
         std::cout << "############################" << std::endl
