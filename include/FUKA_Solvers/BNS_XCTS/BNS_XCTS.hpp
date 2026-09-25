@@ -137,7 +137,7 @@ struct BNS_XCTS : public BNS_XCTS_base {
 
 #include "BNS_XCTS_imp.cpp"
 #include "stages/BNS_XCTS_hydro_rescaling.hpp"
-// #include "stages/BNS_XCTS_hydrostatic_equilibrium.hpp"
+#include "stages/BNS_XCTS_hydrostatic_equilibrium.hpp"
 #include "utilities/BNS_XCTS_diagnostics.cpp"
 #include "utilities/BNS_XCTS_do_newton.cpp"
 #include "utilities/BNS_XCTS_regrid.cpp"
