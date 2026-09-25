@@ -17,7 +17,8 @@ BNS_XCTS_base::BNS_XCTS_base()
       xc1(0),
       xc2(0),
       xo(0),
-      H_scale(0) {};
+      H_scale1(0),
+      H_scale2(0) {};
 
 BNS_XCTS_base::BNS_XCTS_base(BNS_XCTS_base::base_config_t* config_,
                              seq_t const& ns1_seq_,

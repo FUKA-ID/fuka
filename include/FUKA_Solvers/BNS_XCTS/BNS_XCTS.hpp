@@ -74,7 +74,8 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
     internal_variable(double, xc1);
     internal_variable(double, xc2);
     internal_variable(double, xo);
-    internal_variable(double, H_scale);
+    internal_variable(double, H_scale1);
+    internal_variable(double, H_scale2);
 
     virtual ~BNS_XCTS_base() { bconfig.release(); };
 
@@ -135,7 +136,7 @@ struct BNS_XCTS : public BNS_XCTS_base {
 };  // namespace Kadath::FUKA_Solvers
 
 #include "BNS_XCTS_imp.cpp"
-// #include "stages/BNS_XCTS_hydro_rescaling.hpp"
+#include "stages/BNS_XCTS_hydro_rescaling.hpp"
 // #include "stages/BNS_XCTS_hydrostatic_equilibrium.hpp"
 #include "utilities/BNS_XCTS_diagnostics.cpp"
 #include "utilities/BNS_XCTS_do_newton.cpp"
