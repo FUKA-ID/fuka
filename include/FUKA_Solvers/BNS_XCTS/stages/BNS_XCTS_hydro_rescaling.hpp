@@ -297,7 +297,7 @@ void BNS_XCTS<eos_t>::setup_hydro_rescaling_syst() {
         if (std::isnan(bconfig->set(BCO_PARAMS::FIXED_BCOMEGA, NODES::BCO2)))
             space->add_eq_int_outer_sphere_two(
                 *syst,
-                "integ(intS2) - chi2 * Mch * Mch = 0 ");
+                "integ(intS2) - chi2 * Madm2 * Madm2 = 0 ");
     }
 
     space->add_eq_int_volume(*syst,
