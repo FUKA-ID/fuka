@@ -84,7 +84,7 @@ int kadath_config_boost<ParamC>::open_config() {
                             metadata,
                             read_branch(tree, "metadata"));
         controls[CONTROLS::NEW_ID] =
-            Kadath::FUKA::is_older_than(metadata[META_PARAMS::FUKA_VERSION],
+            !Kadath::FUKA::is_older_than(metadata[META_PARAMS::FUKA_VERSION],
                                         "v2.2");
     } else {
         set_metadata_defaults();
