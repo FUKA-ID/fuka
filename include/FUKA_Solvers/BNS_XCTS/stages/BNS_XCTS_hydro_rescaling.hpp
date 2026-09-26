@@ -138,7 +138,7 @@ void BNS_XCTS<eos_t>::setup_hydro_rescaling_syst() {
     // populate all the boiler-plate constants, variables, and definitions
     syst_init();
 
-    bool fixed_com = this->solver_stage != STAGES::ECC_RED;
+    bool fixed_com = this->solver_stage == STAGES::HEADON;
     if (fixed_com) {
         // "center of mass" on the x-axis, connecting both stellar centers
         // These are fixed on the initial ID import as integrals at INF

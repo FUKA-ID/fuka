@@ -72,10 +72,26 @@ struct launch_BHNS_solver {
             solver.do_newton();
         }
 
-        solver.set_solver_stage() = STAGES::TOTAL_BC;
-        solver.set_stagename() = "TOTAL_BC";
-        solver.setup_hydrostatic_equilibrium_stage();
-        solver.do_newton();
+        if (bconfig.set_stage(STAGES::TOTAL)) {
+            solver.set_solver_stage() = STAGES::TOTAL;
+            solver.set_stagename() = "TOTAL";
+            solver.setup_hydrostatic_equilibrium_stage();
+            solver.do_newton();
+        }
+
+        if (bconfig.set_stage(STAGES::TOTAL_BC)) {
+            solver.set_solver_stage() = STAGES::TOTAL_BC;
+            solver.set_stagename() = "TOTAL_BC";
+            solver.setup_hydro_rescaling_syst();
+            solver.do_newton();
+        }
+
+        if (bconfig.set_stage(STAGES::ECC_RED)) {
+            solver.set_solver_stage() = STAGES::ECC_RED;
+            solver.set_stagename() = "ECC_RED";
+            solver.setup_hydro_rescaling_syst();
+            solver.do_newton();
+        }
 
         // auto launch = [](auto& solver, bool ignore_resinc = false, bool ignore_seq = false) {
         //     int exit_status = EXIT_SUCCESS;
@@ -148,9 +164,10 @@ config_t BNS_XCTS_sequence_setup(config_t& seqconfig, std::string outputdir) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     config_t bconfig =
-        binary_generate_sequence_config(seqconfig, {"ns", "bh"}, outputdir);
+        binary_generate_sequence_config(seqconfig, {"ns", "ns"}, outputdir);
 
     update_eos_parameters(seqconfig, bconfig, NODES::BCO1);
+    update_eos_parameters(seqconfig, bconfig, NODES::BCO2);
 
     if (rank == 0)
         bconfig.write_config();

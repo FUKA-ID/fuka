@@ -214,7 +214,7 @@ void BNS_XCTS<eos_t>::setup_hydrostatic_equilibrium_stage() {
         if (std::isnan(bconfig->set(BCO_PARAMS::FIXED_BCOMEGA, NODES::BCO2)))
             space->add_eq_int_outer_sphere_two(
                 *syst,
-                "integ(intS2) - chi2 * Madm2 * Madm2 = 0 ");
+                "integ(intS2) / Madm2 / Madm2 = chi2");
     }
 
     // force-balance equations at the center of each star
@@ -246,9 +246,6 @@ void BNS_XCTS<eos_t>::setup_hydrostatic_equilibrium_stage() {
                              space->NS2,
                              space->ADAPTED2,
                              "integvolume(intMb) = Mb2");
-
-    space->add_eq_int_inf(*syst, "integ(intPy) = 0");
-    space->add_eq_int_inf(*syst, "integ(intPx) = 0");
 }
 
 /** @}*/

@@ -6,7 +6,7 @@ void BNS_XCTS_base::syst_init() {
     fmet->set_system(*syst, "f");
 
     // define numerical constants
-    syst->add_cst("4piG", (*bconfig)(BCO_QPIG));
+    syst->add_cst("4piG", (*bconfig)(BIN_PARAMS::QPIG));
 
     // baryonic mass and dimensionless spin are fixed input parameters
     // along with the ADM of each NS at infinite separation
