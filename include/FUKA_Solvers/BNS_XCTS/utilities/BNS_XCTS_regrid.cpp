@@ -255,5 +255,16 @@ inline void BNS_XCTS_base::regrid() {
                                         new_logh,
                                         new_phi);
     }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Ensure all ranks have the same config file
+    bconfig->set_outputdir(outputdir);
+    bconfig->set_filename(output_fname);
+    bconfig->open_config();
+
+    // Update stored fields and containers
+    reset_all_ptrs();
+    load_solution_from_file();
+    initialize_support_containers();
 }
 }  // namespace Kadath::FUKA_Solvers
