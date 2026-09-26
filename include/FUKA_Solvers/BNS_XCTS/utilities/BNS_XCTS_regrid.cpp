@@ -162,12 +162,12 @@ inline void BNS_XCTS_base::regrid() {
         std::cout << "New bounds:" << std::endl;
         Kadath::bco_utils::print_bounds_from_space(new_space);
 
-        const std::array<int, 2> new_adapted_doms{space->ADAPTED1,
-                                                  space->ADAPTED2};
-        const std::array<int, 2> new_nuc_doms{space->NS1, space->NS2};
+        const std::array<int, 2> new_adapted_doms{new_space.ADAPTED1,
+                                                  new_space.ADAPTED2};
+        const std::array<int, 2> new_nuc_doms{new_space.NS1, new_space.NS2};
         const std::array<double, 2> xc{
-            space->get_domain(space->NS1)->get_center()(1),
-            space->get_domain(space->NS2)->get_center()(1)};
+            new_space.get_domain(new_space.NS1)->get_center()(1),
+            new_space.get_domain(new_space.NS2)->get_center()(1)};
 
         std::array<const Domain_shell_outer_adapted*, 2> new_outer_adapted;
         std::array<const Domain_shell_inner_adapted*, 2> new_inner_adapted;
@@ -176,10 +176,10 @@ inline void BNS_XCTS_base::regrid() {
             auto& d = new_adapted_doms[i];
             new_outer_adapted[i] =
                 dynamic_cast<const Domain_shell_outer_adapted*>(
-                    space->get_domain(d));
+                    new_space.get_domain(d));
             new_inner_adapted[i] =
                 dynamic_cast<const Domain_shell_inner_adapted*>(
-                    space->get_domain(d + 1));
+                    new_space.get_domain(d + 1));
         }
 
         for (int i = 0; i < 2; ++i) {
