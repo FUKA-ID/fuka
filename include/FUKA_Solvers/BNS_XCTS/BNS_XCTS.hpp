@@ -128,8 +128,19 @@ struct BNS_XCTS : public BNS_XCTS_base {
         populate_domain_support_containers();
     }
 
+   private:
     void setup_hydro_rescaling_syst();
     void setup_hydrostatic_equilibrium_stage();
+
+   public:
+    void setup_syst() {
+        if (solver_stage == STAGES::PRE || solver_stage == STAGES::TOTAL_BC ||
+            solver_stage == STAGES::ECC_RED) {
+            setup_hydro_rescaling_syst();
+        } else if (solver_stage == STAGES::TOTAL) {
+            setup_hydrostatic_equilibrium_stage();
+        }
+    }
 };
 
 /** @}*/

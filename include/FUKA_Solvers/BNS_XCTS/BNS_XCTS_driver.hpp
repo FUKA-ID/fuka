@@ -65,67 +65,65 @@ struct launch_BHNS_solver {
                                outputdir,
                                rank);
 
+        auto launch = [](auto& solver,
+                         bool ignore_resinc = false,
+                         bool ignore_seq = false) {
+            int exit_status = EXIT_SUCCESS;
+            do {
+                // initial solution
+                solver.setup_syst();
+                solver.do_newton();
+
+                if (!ignore_resinc) {
+                    // Make sure final solution uses optimal domain decomposition
+                    solver.regrid();
+
+                    // resolve at current resolution
+                    solver.setup_syst();
+                    solver.do_newton();
+                }
+
+                // Obtain final resolution for the desired
+                // solution or the first solution in a sequence
+                // All remaining sequences will be computed
+                // at the final resolution only
+                // Note: only occurs if the last stage is NOROT_BC
+                while (!ignore_resinc && solver.increment_resolution() &&
+                       (exit_status != EXIT_FAILURE)) {
+                    // regrid to new resolution
+                    solver.regrid();
+
+                    // initial solution
+                    solver.setup_syst();
+                    exit_status = solver.do_newton();
+                }
+            } while (!ignore_seq);  // && solver.increment_seq());
+            return exit_status;
+        };
+
         if (bconfig.set_stage(STAGES::PRE)) {
             solver.set_solver_stage() = STAGES::PRE;
             solver.set_stagename() = "PRE";
-            solver.setup_hydro_rescaling_syst();
-            solver.do_newton();
+            launch(solver, true, true);
         }
 
         if (bconfig.set_stage(STAGES::TOTAL)) {
             solver.set_solver_stage() = STAGES::TOTAL;
             solver.set_stagename() = "TOTAL";
-            solver.setup_hydrostatic_equilibrium_stage();
-            solver.do_newton();
+            launch(solver, false, true);
         }
 
         if (bconfig.set_stage(STAGES::TOTAL_BC)) {
             solver.set_solver_stage() = STAGES::TOTAL_BC;
             solver.set_stagename() = "TOTAL_BC";
-            solver.setup_hydro_rescaling_syst();
-            solver.do_newton();
+            launch(solver, false, true);
         }
 
         if (bconfig.set_stage(STAGES::ECC_RED)) {
             solver.set_solver_stage() = STAGES::ECC_RED;
             solver.set_stagename() = "ECC_RED";
-            solver.setup_hydro_rescaling_syst();
-            solver.do_newton();
+            launch(solver, false, true);
         }
-
-        // auto launch = [](auto& solver, bool ignore_resinc = false, bool ignore_seq = false) {
-        //     int exit_status = EXIT_SUCCESS;
-        //     do {
-        //         // initial solution
-        //         solver.setup_syst();
-        //         solver.do_newton();
-
-        //         if (!ignore_resinc) {
-        //             // Make sure final solution uses optimal domain decomposition
-        //             solver.regrid();
-
-        //             // resolve at current resolution
-        //             solver.setup_syst();
-        //             solver.do_newton();
-        //         }
-
-        //         // Obtain final resolution for the desired
-        //         // solution or the first solution in a sequence
-        //         // All remaining sequences will be computed
-        //         // at the final resolution only
-        //         // Note: only occurs if the last stage is NOROT_BC
-        //         while (!ignore_resinc && solver.increment_resolution() &&
-        //                (exit_status != EXIT_FAILURE)) {
-        //             // regrid to new resolution
-        //             solver.regrid();
-
-        //             // initial solution
-        //             solver.setup_syst();
-        //             exit_status = solver.do_newton();
-        //         }
-        //     } while (!ignore_seq && solver.increment_seq());
-        //     return exit_status;
-        // };
         return exit_status;
     };
 };
