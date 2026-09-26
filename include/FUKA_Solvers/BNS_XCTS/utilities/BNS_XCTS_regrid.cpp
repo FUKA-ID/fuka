@@ -7,9 +7,10 @@
 
 namespace Kadath::FUKA_Solvers {
 bool BNS_XCTS_base::increment_resolution() {
-    // Currently TOTAL_BC is the only stage that computes solutions in hydrostratic equilibrium
+    // Currently TOTAL is the only stage that computes solutions in
+    // hydrostratic equilibrium
     if (!(resolution->final() > resolution->init()) ||
-        solver_stage != STAGES::TOTAL_BC)
+        solver_stage != STAGES::TOTAL)
         return false;
 
     auto resolution_indices = resolution->get_indices();
@@ -235,8 +236,8 @@ inline void BNS_XCTS_base::regrid() {
             new_phi.set_domain(dom + 1).annule_hard();
         }
         for (int dom = space->OUTER; dom < ndom; ++dom) {
-            new_logh.set_domain(dom + 1).annule_hard();
-            new_phi.set_domain(dom + 1).annule_hard();
+            new_logh.set_domain(dom).annule_hard();
+            new_phi.set_domain(dom).annule_hard();
         }
 
         new_lapse.std_base();
