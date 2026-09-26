@@ -382,6 +382,9 @@ struct BNS_XCTS_setup_boosted_3d {
         shift.std_base();
         phi.std_base();
 
+        // Ensure preconditioning stage is ran
+        bconfig.set_stage(STAGES::PRE) = true;
+
         // save everything to a binary file
         save_to_file(space, bconfig, conf, lapse, shift, logh, phi);
     }
