@@ -47,16 +47,16 @@ struct launch_NS_XCTS_solver {
         }
         fclose(ff1);
         int exit_status = EXIT_SUCCESS;
-        auto launch = [](auto& solver,
-                         bool ignore_resinc = false,
-                         bool ignore_seq = false) {
+        auto launch = [&bconfig](auto& solver,
+                                 bool ignore_resinc = false,
+                                 bool ignore_seq = false) {
             int exit_status = EXIT_SUCCESS;
             do {
                 // initial solution
                 solver.setup_syst();
                 solver.do_newton();
 
-                if (!ignore_resinc) {
+                if (!ignore_resinc && !bconfig.control(CONTROLS::ITERATIVE_M)) {
                     // Make sure final solution uses optimal domain decomposition
                     solver.regrid();
 
@@ -293,6 +293,7 @@ int NS_XCTS_seq_driver(NS_XCTS_BASE::base_config_t& seqconfig,
     // Get non-rotating solution for the given mass or TOV mass if
     // bconfig.control(CONTROLS::ITERATIVE_M)
     NS_XCTS_solver_driver(bconfig, seq, resolution, outputdir);
+    bconfig.control(CONTROLS::ITERATIVE_M) = false;
 
     seqconfig = bconfig;
 
