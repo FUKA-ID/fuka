@@ -293,8 +293,8 @@ class BIN_INFO {
    * @param[input]  BCOidx Index of BCO of interest
    * @param[output] *BCOS[BCOidx])(idx) referene to BCO parameter requested
    */
-    auto& operator()(const int idx, const int BCOidx) {
-        return (*BCOS[BCOidx])(idx);
+    auto& operator()(const BCO_PARAMS idx, const NODES BCOidx) {
+        return (*BCOS[static_cast<int>(BCOidx)])(idx);
     }
 
     /* BIN_INFO::operator()
@@ -303,7 +303,9 @@ class BIN_INFO {
    * @param[input]  idx Index of the Paramter of interest - see config_enum
    * @param[output] bin_params[idx] referene to binary parameter requested
    */
-    auto& operator()(const int idx) { return bin_params[idx]; }
+    auto& operator()(const BIN_PARAMS idx) {
+        return bin_params[static_cast<int>(idx)];
+    }
 
     /* BIN_INFO::set_eos_param
    * Returns a reference to a BCO's EOS parameter to set.  Cannot be used
@@ -314,8 +316,9 @@ class BIN_INFO {
    * @param[output] eos_param reference to eos parameter to assign
    * @throws std::invalid_argument Throws when dynamic_cast fails
    */
-    auto& set_eos_param(const int idx, const int BCOidx) const {
-        if (auto child_ptr = dynamic_cast<BCO_NS_INFO*>(BCOS[BCOidx].get())) {
+    auto& set_eos_param(const EOS_PARAMS idx, const NODES BCOidx) const {
+        if (auto child_ptr = dynamic_cast<BCO_NS_INFO*>(
+                BCOS[static_cast<int>(BCOidx)].get())) {
             return child_ptr->set_eos_param(idx);
         }
         throw std::invalid_argument(
@@ -332,8 +335,9 @@ class BIN_INFO {
    * @throws std::invalid_argument Throws when dynamic_cast fails
    */
     template <typename T>
-    constexpr T get_eos_param(const int idx, const int BCOidx) const {
-        if (auto child_ptr = dynamic_cast<BCO_NS_INFO*>(BCOS[BCOidx].get())) {
+    constexpr T get_eos_param(const EOS_PARAMS idx, const NODES BCOidx) const {
+        if (auto child_ptr = dynamic_cast<BCO_NS_INFO*>(
+                BCOS[static_cast<int>(BCOidx)].get())) {
             return child_ptr->template get_eos_param<T>(idx);
         }
         throw std::invalid_argument(
@@ -359,16 +363,16 @@ class BIN_INFO {
             if (bcotype == "ns") {
                 kadath_config_boost<BCO_NS_INFO> nsconfig;
                 nsconfig.set_defaults();
-                for (auto i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+                for (auto i : BCO_PARAMS_ARY)
                     bconfig.set(i, bco) = nsconfig.set(i);
-                for (auto i = 0; i < EOS_PARAMS::NUM_EOS_PARAMS; ++i)
+                for (auto i : EOS_PARAMS_ARY)
                     bconfig.set_eos(i, bco) = nsconfig.set_eos(i);
                 includes_matter = true;
                 Ms[bco] = bconfig(BCO_PARAMS::MADM, bco);
             } else if (bcotype == "bh") {
                 kadath_config_boost<BCO_BH_INFO> bhconfig;
                 bhconfig.set_defaults();
-                for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+                for (auto i : BCO_PARAMS_ARY)
                     bconfig.set(i, bco) = bhconfig.set(i);
                 Ms[bco] = bconfig(BCO_PARAMS::MCH, bco);
             }
@@ -423,16 +427,16 @@ class BIN_INFO {
             if (bcotype == "ns") {
                 kadath_config_boost<BCO_NS_INFO> nsconfig;
                 nsconfig.set_minimal_defaults();
-                for (auto i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+                for (auto i : BCO_PARAMS_ARY)
                     bconfig.set(i, bco) = nsconfig.set(i);
-                for (auto i = 0; i < EOS_PARAMS::NUM_EOS_PARAMS; ++i)
+                for (auto i : EOS_PARAMS_ARY)
                     bconfig.set_eos(i, bco) = nsconfig.set_eos(i);
                 includes_matter = true;
                 Ms[bco] = bconfig(BCO_PARAMS::MADM, bco);
             } else if (bcotype == "bh") {
                 kadath_config_boost<BCO_BH_INFO> bhconfig;
                 bhconfig.set_minimal_defaults();
-                for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+                for (auto i : BCO_PARAMS_ARY)
                     bconfig.set(i, bco) = bhconfig.set(i);
                 Ms[bco] = bconfig(BCO_PARAMS::MCH, bco);
             }
