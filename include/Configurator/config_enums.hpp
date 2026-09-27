@@ -17,6 +17,7 @@
 */
 
 #pragma once
+#include <array>
 #include <map>
 #include <string>
 
@@ -206,8 +207,14 @@ enum META_PARAMS {
   * name to the associated enumerator index
   */
 extern const std::map<std::string, BIN_PARAMS> MBIN_PARAMS;
+extern const std::array<BIN_PARAMS, NUM_BPARAMS> BIN_PARAMS_ARY;
+
 extern const std::map<std::string, BCO_PARAMS> MBCO_PARAMS;
+extern const std::array<BCO_PARAMS, NUM_BCO_PARAMS> BCO_PARAMS_ARY;
+
 extern const std::map<std::string, EOS_PARAMS> MEOS_PARAMS;
+extern const std::array<EOS_PARAMS, NUM_EOS_PARAMS> EOS_PARAMS_ARY;
+
 extern const std::map<std::string, NODES> M_REQ_NODES;
 extern const std::map<std::string, NODES> MBCO;
 extern const std::map<std::string, BCO_FIELDS> MBCO_FIELDS;
@@ -217,6 +224,8 @@ extern const std::map<std::string, BCO_FIELDS> MBCO_SFIELDS_1;
 extern const std::map<std::string, STAGES> MSTAGE;
 extern const std::map<std::string, CONTROLS> MCONTROLS;
 extern const std::map<std::string, CONTROLS> MCONTROLS_READ;
+extern const std::array<CONTROLS, NUM_CONTROLS> CONTROLS_ARY;
+
 extern const std::map<std::string, SEQ_SETTINGS> MSEQ_SETTINGS;
 extern const std::map<std::string, STAGES> MBINHEADONSTAGE;
 extern const std::map<std::string, STAGES> MBNSSTAGE;
