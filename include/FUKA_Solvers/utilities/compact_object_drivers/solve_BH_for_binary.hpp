@@ -4,7 +4,7 @@
 
 namespace Kadath::FUKA_Solvers {
 template <typename config_t>
-std::string solve_BH_for_binary(config_t& bconfig, const size_t bco) {
+std::string solve_BH_for_binary(config_t& bconfig, const NODES bco) {
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     std::string output_path = (bconfig.control(CONTROLS::SAVE_COS))
@@ -19,10 +19,10 @@ std::string solve_BH_for_binary(config_t& bconfig, const size_t bco) {
     bhconfig.control(CONTROLS::SEQUENCES) = true;
 
     // copy parameters from binary configuration
-    for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+    for (auto i : BCO_PARAMS_ARY)
         bhconfig.set(i) = bconfig.set(i, bco);
 
-    for (int i = 0; i < CONTROLS::NUM_CONTROLS; ++i)
+    for (auto i : CONTROLS_ARY)
         bhconfig.control(i) = bconfig.control(i);
 
     for (int i = 0; i < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++i)
@@ -49,7 +49,7 @@ std::string solve_BH_for_binary(config_t& bconfig, const size_t bco) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     // update binary parameters
-    for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+    for (auto i : BCO_PARAMS_ARY)
         bconfig.set(i, bco) = bhconfig.set(i);
     bconfig.set(BCO_PARAMS::NSHELLS, bco) = nshells;
 

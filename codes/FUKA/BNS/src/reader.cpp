@@ -317,6 +317,7 @@ struct bns_reader {
 
         // compute everything for both stars
         for (int i : {0, 1}) {
+            NODES BCO = static_cast<NODES>(i);
             int dom = adapted_doms[i];
             shells[i] = dom - nuc_doms[i] - 1;
 
@@ -366,7 +367,7 @@ struct bns_reader {
 
             // the correct ADM mass (at infinite separation), is given from the single star solution
             // and thus fixed
-            madm[i] = bconfig(MADM, i);
+            madm[i] = bconfig(MADM, BCO);
 
             // minimal and maximal (coordinate) radius across the adapted surface
             r_extrema.push_back(bco_utils::get_rmin_rmax(space, dom));
@@ -461,6 +462,7 @@ struct bns_reader {
         ary_i bounds{space.NS2 - 1, space.OUTER - 1};
         std::string header(22, '#');
         for (int i = 0; i <= 1; ++i) {
+            NODES BCO = static_cast<NODES>(i);
             std::cout << header + ns_str[i] + header + "\n";
             std::cout << FORMAT1 << "Center_COM = " << "(" << xcom[i]
                       << ", 0, 0)\n"
@@ -486,9 +488,9 @@ struct bns_reader {
             print_vec(mb_distro[i]);
             std::cout
                 << ")\n"
-                << FORMAT1 << "Isolated ADM Mass = " << bconfig(MADM, i) << "\n"
+                << FORMAT1 << "Isolated ADM Mass = " << bconfig(MADM, BCO) << "\n"
                 << FORMAT1 << "Quasi-local Madm = " << ql_madm[i]
-                << " Diff:" << std::fabs(1. - ql_madm[i] / bconfig(MADM, i))
+                << " Diff:" << std::fabs(1. - ql_madm[i] / bconfig(MADM, BCO))
                 << std::endl
                 // quasi-local spin angular momentum
                 << FORMAT1 << "Quasi-local S = " << ql_spin[i]
@@ -496,9 +498,9 @@ struct bns_reader {
                 // dimensionless spin (constant, given by the imported single star!)
                 // angular frequency paramter of the star, describing the magnitude of the spin component of the velocity field
                 << FORMAT1
-                << "Chi = " << ql_spin[i] / bconfig(MADM, i) / bconfig(MADM, i)
-                << " [" << bconfig(CHI, i) << "]\n"
-                << FORMAT1 << "Omega = " << bconfig(OMEGA, i)
+                << "Chi = " << ql_spin[i] / bconfig(MADM, BCO) / bconfig(MADM, BCO)
+                << " [" << bconfig(CHI, BCO) << "]\n"
+                << FORMAT1 << "Omega = " << bconfig(OMEGA, BCO)
                 << std::endl
                 // location of the maximal density (and compared to the nucleus' center)
                 << FORMAT1 << "x(max(Density)) = " << x_max[i] << " ("
