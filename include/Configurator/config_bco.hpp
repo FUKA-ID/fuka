@@ -170,7 +170,9 @@ class BCO_INFO {
    *
    * @param[output] bco_params[idx] requested BCO parameter
    */
-    auto& operator()(const int idx) { return bco_params[idx]; }
+    auto& operator()(const BCO_PARAMS idx) {
+        return bco_params[static_cast<int>(idx)];
+    }
 
     friend std::ostream& operator<<(std::ostream&, const BCO_INFO&);
 };
@@ -519,7 +521,9 @@ class BCO_NS_INFO : public BCO_INFO {
    *
    * @param[output] eos_param[idx]
    */
-    auto& set_eos_param(const int idx) { return eos_params[idx]; }
+    auto& set_eos_param(const EOS_PARAMS idx) {
+        return eos_params[static_cast<int>(idx)];
+    }
 
     /**
    * BCO_NS_INFO::get_eos_param
@@ -530,7 +534,7 @@ class BCO_NS_INFO : public BCO_INFO {
    * @param[output] eos_param[idx]
    */
     template <typename T>
-    const T get_eos_param(const int idx) const {
+    const T get_eos_param(const EOS_PARAMS idx) const {
         return std::get<T>(eos_params[idx]);
     }
 

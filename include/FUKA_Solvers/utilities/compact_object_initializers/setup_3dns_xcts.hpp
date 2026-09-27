@@ -83,7 +83,7 @@ template <class eos_t>
 struct setup_3dns_xcts_functor {
 
     template <typename config_t>
-    void operator()(config_t& bconfig, size_t mass_fixing_idx) {
+    void operator()(config_t& bconfig, BCO_PARAMS mass_fixing_idx) {
         auto& fields = bconfig.return_fields();
 
         int type_coloc = CHEB_TYPE;

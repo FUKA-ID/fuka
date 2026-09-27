@@ -58,7 +58,7 @@ template <class config_t>
 void bns_xcts_setup_space(config_t& bconfig) {
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    std::array<int, 2> bcos{NODES::BCO1, NODES::BCO2};
+    std::array<NODES, 2> bcos{NODES::BCO1, NODES::BCO2};
     std::array<std::string, 2> filenames;
 
     for (int i = 0; i < 2; ++i)
@@ -126,10 +126,10 @@ struct bns_setup_boosted_3d {
         update_config_NS_radii(spacein2, NS2config, 1);
 
         // update NS parameters in binary config
-        for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+        for (auto i : BCO_PARAMS_ARY)
             bconfig.set(i, NODES::BCO1) = NS1config.set(i);
 
-        for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+        for (auto i : BCO_PARAMS_ARY)
             bconfig.set(i, NODES::BCO2) = NS2config.set(i);
 
         auto gen_radius_field =

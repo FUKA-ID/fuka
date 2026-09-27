@@ -19,10 +19,20 @@
 
 #include <Configurator/config_enums.hpp>
 #include <map>
+#include <numeric>
 #include <string>
 
 namespace Kadath {
 namespace FUKA_Config {
+
+template <class T, std::size_t N>
+constexpr std::array<T, N> make_enum_range() {
+    std::array<T, N> ary{};
+    for (std::size_t i = 0; i < N; ++i)
+        ary[i] = static_cast<T>(i);
+    return ary;
+}
+
 /**
   * \addtogroup Configurator_enums
 	* \ingroup Configurator
@@ -46,6 +56,9 @@ const std::map<std::string, BIN_PARAMS> MBIN_PARAMS = {
     {"ecc_omega", ECC_OMEGA},  // Fixed omega used for eccentricity reduction
     {"outer_shells", OUTER_SHELLS},  // N shells before compactified domain
 };
+
+const std::array<BIN_PARAMS, NUM_BPARAMS> BIN_PARAMS_ARY =
+    make_enum_range<BIN_PARAMS, NUM_BPARAMS>();
 
 const std::map<std::string, BCO_PARAMS> MBCO_PARAMS = {
     {"res", BCO_RES},      // Resolution
@@ -78,6 +91,8 @@ const std::map<std::string, BCO_PARAMS> MBCO_PARAMS = {
     {"ql_jadm", QLJADM},
     {"keplerian", KEPLERIAN},
 };
+const std::array<BCO_PARAMS, NUM_BCO_PARAMS> BCO_PARAMS_ARY =
+    make_enum_range<BCO_PARAMS, NUM_BCO_PARAMS>();
 
 const std::map<std::string, EOS_PARAMS> MEOS_PARAMS = {
     {"eostype", EOSTYPE},  // Cold_PWPoly, Cold_Table
@@ -85,6 +100,8 @@ const std::map<std::string, EOS_PARAMS> MEOS_PARAMS = {
     {"h_cut", HCUT},       // value to cut the specific enthalpy (0 is default)
     {"interpolation_pts", INTERP_PTS}  // N points for interpolating the table
 };
+const std::array<EOS_PARAMS, NUM_EOS_PARAMS> EOS_PARAMS_ARY =
+    make_enum_range<EOS_PARAMS, NUM_EOS_PARAMS>();
 
 //required independent of binary, BCO, etc
 const std::map<std::string, NODES> M_REQ_NODES = {
@@ -212,6 +229,8 @@ const std::map<std::string, CONTROLS> MCONTROLS = {
     {"centralized_cos", SAVE_COS},  ///< Save CO solutions to a central location
     {"use_iso_solver", USE_ISO_SOLVER},  ///< Use the ISO solver for NSs
 };
+const std::array<CONTROLS, NUM_CONTROLS> CONTROLS_ARY =
+    make_enum_range<CONTROLS, NUM_CONTROLS>();
 
 const std::map<std::string, SEQ_SETTINGS> MSEQ_SETTINGS = {
     {"solver_precision", PREC},  ///< Threshold for a converged solution

@@ -1004,8 +1004,8 @@ void update_config_BH_radii(space_t& space,
  * @param[input] bco: BCO configurator index
  * @return: returns 1/weight^4
  */
-template <typename config_t>
-double set_decay(config_t& bconfig, const size_t bco) {
+template <typename config_t, typename BCO_idx_t>
+double set_decay(config_t& bconfig, const BCO_idx_t bco) {
     if (std::isnan(bconfig.set(DECAY, bco)))
         bconfig.set(DECAY, bco) = bconfig(DIST) / 2.;
     const double weight4 = std::pow(bconfig(DECAY, bco), 4.);

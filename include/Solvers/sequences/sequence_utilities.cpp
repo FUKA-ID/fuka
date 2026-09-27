@@ -35,7 +35,7 @@ config_t binary_generate_sequence_config(config_t& seqconfig,
             bconfig.seq_setting(idx) = seqconfig.seq_setting(idx);
 
     // Activate all controls that are active in the seq config
-    for (auto idx = 0; idx < CONTROLS::NUM_CONTROLS; ++idx)
+    for (auto idx : CONTROLS_ARY)
         if (seqconfig.control(idx))
             bconfig.control(idx) = seqconfig.control(idx);
 
@@ -48,13 +48,13 @@ config_t binary_generate_sequence_config(config_t& seqconfig,
         bconfig.control(idx) = seqconfig.control(idx);
 
     // Copy binary parameters
-    for (auto idx = 0; idx < BIN_PARAMS::NUM_BPARAMS; ++idx)
+    for (auto idx : BIN_PARAMS_ARY)
         if (!std::isnan(seqconfig.set(idx)))
             bconfig.set(idx) = seqconfig.set(idx);
 
     // Copy component parameters
     for (auto bco : {BCO1, BCO2}) {
-        for (auto idx = 0; idx < BCO_PARAMS::NUM_BCO_PARAMS; ++idx)
+        for (auto idx : BCO_PARAMS_ARY)
             if (!std::isnan(seqconfig.set(idx, bco)))
                 bconfig.set(idx, bco) = seqconfig.set(idx, bco);
     }
@@ -91,7 +91,7 @@ config_t generate_sequence_config(config_t& seqconfig, std::string outputdir) {
             bconfig.seq_setting(idx) = seqconfig.seq_setting(idx);
 
     // Activate all controls that are active in the seq config
-    for (auto idx = 0; idx < CONTROLS::NUM_CONTROLS; ++idx)
+    for (auto idx : CONTROLS_ARY)
         if (seqconfig.control(idx))
             bconfig.control(idx) = seqconfig.control(idx);
 
@@ -100,7 +100,7 @@ config_t generate_sequence_config(config_t& seqconfig, std::string outputdir) {
         bconfig.control(idx) = seqconfig.control(idx);
 
     // Copy BH characteristics
-    for (auto idx = 0; idx < BCO_PARAMS::NUM_BCO_PARAMS; ++idx)
+    for (auto idx : BCO_PARAMS_ARY)
         if (!std::isnan(seqconfig.set(idx)))
             bconfig.set(idx) = seqconfig.set(idx);
 
@@ -125,7 +125,7 @@ template <class src_config_t, class dst_config_t, class... bco_t>
 void update_eos_parameters(src_config_t& seqconfig,
                            dst_config_t& bconfig,
                            bco_t... bco) {
-    for (int idx = 0; idx < EOS_PARAMS::NUM_EOS_PARAMS; ++idx)
+    for (auto idx : EOS_PARAMS_ARY)
         bconfig.set_eos(idx, bco...) = seqconfig.set_eos(idx, bco...);
 }
 

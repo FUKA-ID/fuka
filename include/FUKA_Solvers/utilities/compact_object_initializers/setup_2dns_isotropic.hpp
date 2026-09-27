@@ -129,7 +129,7 @@ template <class eos_t>
 struct setup_2dns_isotropic_functor {
 
     template <typename config_t>
-    void operator()(config_t& bconfig, size_t mass_fixing_idx) {
+    void operator()(config_t& bconfig, BCO_PARAMS mass_fixing_idx) {
         using namespace Kadath::FUKA_EOS;
 
         int type_coloc = CHEB_TYPE;

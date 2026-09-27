@@ -127,7 +127,9 @@ struct kadath_config_boost : public configurator_base {
 
     auto const& control(const int idx) const { return controls[idx]; }
 
-    auto& control(const int idx) { return controls[idx]; }
+    auto& control(const CONTROLS idx) {
+        return controls[static_cast<int>(idx)];
+    }
 
     auto& seq_setting(const int idx) { return seq_settings[idx]; }
 
@@ -213,11 +215,13 @@ struct kadath_config_boost : public configurator_base {
     }
 
     /**
-   * overloaded () to obtain parameters from base parameter container
-   * but throws an error when a NaN is encountered
-   * @param[input] idx: index of parameter to read/write
-   */
-    constexpr auto& operator()(const int idx) {
+    * overloaded () to obtain parameters from base parameter container
+    * but throws an error when a NaN is encountered
+    * @param[input] idx: index of parameter to read/write
+    */
+    template <typename ParamEnum>
+    constexpr auto& operator()(const ParamEnum idx) {
+        // Convert enum to int and proceed
         if (!check_for_nan(container.get_map(), container(idx), idx)) {
             return container(idx);
         }
@@ -225,13 +229,14 @@ struct kadath_config_boost : public configurator_base {
     }
 
     /**
-   * overloaded () to obtain parameters from child paramter container
-   * but throws an error when a NaN is encountered
-   * @param[input] idx: index of parameter to read/write
-   * @param[input] Pidx: index of child parameter container i.e. [BCO1,BCO2]
-   * @return parameter
-   */
-    constexpr auto& operator()(const int idx, const int Pidx) {
+    * overloaded () to obtain parameters from child parameter container
+    * but throws an error when a NaN is encountered
+    * @param[input] idx: index of parameter to read/write
+    * @param[input] Pidx: index of child parameter container i.e. [BCO1,BCO2]
+    * @return parameter
+    */
+    template <typename ParamEnum>
+    constexpr auto& operator()(const ParamEnum idx, const NODES Pidx) {
         if (!check_for_nan(container.get_map(Pidx),
                            container(idx, Pidx),
                            idx)) {
