@@ -28,11 +28,11 @@ std::string solve_NS_ISO_from_XCTS_config(config_t& bconfig,
         nsconfig.seq_setting(i) = bconfig.seq_setting(i);
 
     // copy parameters from binary configuration
-    for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+    for (auto i : BCO_PARAMS_ARY)
         nsconfig.set(i) = bconfig.set(i);
     nsconfig.set(BCO_PARAMS::DIM) = 2;
 
-    for (int i = 0; i < CONTROLS::NUM_CONTROLS; ++i)
+    for (auto i : CONTROLS_ARY)
         nsconfig.control(i) = bconfig.control(i);
 
     for (int i = 0; i < STAGES::NUM_STAGES; ++i) {

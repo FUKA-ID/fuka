@@ -29,13 +29,13 @@ std::string solve_NS_for_binary_v2(config_t& bconfig, const size_t bco) {
     nsconfig.control(CONTROLS::SEQUENCES) = true;
 
     // copy parameters from binary configuration
-    for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+    for (auto i : BCO_PARAMS_ARY)
         nsconfig.set(i) = bconfig.set(i, bco);
 
-    for (int i = 0; i < EOS_PARAMS::NUM_EOS_PARAMS; ++i)
+    for (auto i : EOS_PARAMS_ARY)
         nsconfig.set_eos(i) = bconfig.set_eos(i, bco);
 
-    for (int i = 0; i < CONTROLS::NUM_CONTROLS; ++i)
+    for (auto i : CONTROLS_ARY)
         nsconfig.control(i) = bconfig.control(i);
 
     for (int i = 0; i < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++i)
@@ -68,7 +68,7 @@ std::string solve_NS_for_binary_v2(config_t& bconfig, const size_t bco) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     // update binary parameters
-    for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+    for (auto i : BCO_PARAMS_ARY)
         bconfig.set(i, bco) = nsconfig.set(i);
     // put shells back for the binary
     bconfig.set(BCO_PARAMS::NINSHELLS, bco) = ninshells;

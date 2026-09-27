@@ -17,7 +17,7 @@ namespace Kadath::FUKA_Solvers {
  * @return Unique pointer to the TOV solution
  */
 template <typename eos_t, typename config_t>
-auto setup_ns_config_from_TOV(config_t& bconfig, size_t mass_fixing_idx) {
+auto setup_ns_config_from_TOV(config_t& bconfig, BCO_PARAMS mass_fixing_idx) {
     using namespace Kadath::Margherita;
     auto tov = std::make_unique<MargheritaTOV<eos_t>>();
 

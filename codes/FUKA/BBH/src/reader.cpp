@@ -255,6 +255,7 @@ int main(int argc, char** argv) {
                   << std::showpos
     std::string header(22, '#');
     for (int i = 0; i <= 1; ++i) {
+        NODES BCO = static_cast<NODES>(i);
         auto [lapsemin, lapsemax] =
             bco_utils::get_field_min_max(lapse, nuc_doms[i] + 2, INNER_BC);
         auto [confmin, confmax] =
@@ -279,14 +280,14 @@ int main(int argc, char** argv) {
                   << lapsemax << "]\n"
                   << FORMAT1 << " PSI = " << "[" << confmin << ", " << confmax
                   << "]\n"
-                  << FORMAT1 << "Mirr = " << mirrs[i] << "[" << bconfig(MIRR, i)
+                  << FORMAT1 << "Mirr = " << mirrs[i] << "[" << bconfig(MIRR, BCO)
                   << "]\n"
-                  << FORMAT1 << "Mch = " << mchs[i] << "[" << bconfig(MCH, i)
+                  << FORMAT1 << "Mch = " << mchs[i] << "[" << bconfig(MCH, BCO)
                   << "]\n"
-                  << FORMAT1 << "Chi = " << chis[i] << "[" << bconfig(CHI, i)
+                  << FORMAT1 << "Chi = " << chis[i] << "[" << bconfig(CHI, BCO)
                   << "]\n"
                   << FORMAT << "S = " << spins[i] << std::endl
-                  << FORMAT << "Omega = " << bconfig(OMEGA, i) << "\n";
+                  << FORMAT << "Omega = " << bconfig(OMEGA, BCO) << "\n";
     }
     std::cout << header + " Binary " + header + '\n'
               << FORMAT1 << std::fixed << "RES = " << "[" << res_r << ","

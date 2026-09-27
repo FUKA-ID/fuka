@@ -60,7 +60,7 @@ template <class config_t>
 void bbh_xcts_setup_space(config_t& bconfig) {
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    std::array<int, 2> bcos{NODES::BCO1, NODES::BCO2};
+    std::array<NODES, 2> bcos{NODES::BCO1, NODES::BCO2};
     std::array<std::string, 2> filenames;
 
     for (int i = 0; i < 2; ++i)
@@ -113,9 +113,9 @@ inline void bbh_xcts_setup_boosted_3d(
     // update binary parameters - but save shell input
     const int nshells1 = bconfig(BCO_PARAMS::NSHELLS, NODES::BCO1);
     const int nshells2 = bconfig(BCO_PARAMS::NSHELLS, NODES::BCO2);
-    for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i) {
-        bconfig.set(i, NODES::BCO1) = BH1config.set(i);
-        bconfig.set(i, NODES::BCO2) = BH2config.set(i);
+    for (auto idx : BCO_PARAMS_ARY) {
+        bconfig.set(idx, NODES::BCO1) = BH1config.set(idx);
+        bconfig.set(idx, NODES::BCO2) = BH2config.set(idx);
     }
     bconfig.set(BCO_PARAMS::NSHELLS, NODES::BCO1) = nshells1;
     bconfig.set(BCO_PARAMS::NSHELLS, NODES::BCO2) = nshells2;

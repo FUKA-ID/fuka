@@ -162,14 +162,11 @@ class Solver {
         auto check_and_update_config = [&](auto p) {
             exists = true;
             base_config_t old_solution(p + ".info");
-            if (bconfig.set(BCO_PARAMS::NSHELLS) !=
-                old_solution.set(BCO_PARAMS::NSHELLS))
-                return false;
 
             // make sure we copy stages, controls, and settings over
             for (auto idx = 0; idx < STAGES::NUM_STAGES; ++idx)
                 old_solution.set_stage(idx) = bconfig.set_stage(idx);
-            for (auto idx = 0; idx < CONTROLS::NUM_CONTROLS; ++idx)
+            for (auto idx : CONTROLS_ARY)
                 old_solution.control(idx) = bconfig.control(idx);
             for (auto idx = 0; idx < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++idx)
                 old_solution.seq_setting(idx) = bconfig.seq_setting(idx);
