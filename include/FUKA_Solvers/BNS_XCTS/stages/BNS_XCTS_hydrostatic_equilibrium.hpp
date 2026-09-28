@@ -44,6 +44,16 @@ void BNS_XCTS<eos_t>::setup_hydrostatic_equilibrium_stage() {
                   << " and q = " << (*bconfig)(Q) << std::endl
                   << std::string(42, '#') << std::endl;
     }
+    // We use `config_filename()` vs `config_filename_abs()` since
+    // `solution_exists` will probe the HOME_KADATH/COs directory
+    auto const current = bconfig->config_filename();
+    if (!bconfig->control(RESOLVE) && solution_exists()) {
+        if (rank == 0) {
+            std::cout << "Solved previously: " << bconfig->config_filename_abs()
+                      << std::endl;
+        }
+        reload();
+    }
 
     {
         double loghc = bco_u::get_boundary_val(space->NS1, *logh, INNER_BC);

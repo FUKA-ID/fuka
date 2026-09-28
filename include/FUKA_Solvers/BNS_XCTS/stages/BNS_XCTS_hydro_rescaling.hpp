@@ -80,6 +80,16 @@ void BNS_XCTS<eos_t>::setup_hydro_rescaling_syst() {
                 (*bconfig)(BIN_PARAMS::ECC_OMEGA);
         }
     }
+    // We use `config_filename()` vs `config_filename_abs()` since
+    // `solution_exists` will probe the HOME_KADATH/COs directory
+    auto const current = bconfig->config_filename();
+    if (!bconfig->control(RESOLVE) && solution_exists()) {
+        if (rank == 0) {
+            std::cout << "Solved previously: " << bconfig->config_filename_abs()
+                      << std::endl;
+        }
+        reload();
+    }
 
     // setup background position vector field - only needed for ECC_RED stage
     Vector CART(*space, CON, *basis);

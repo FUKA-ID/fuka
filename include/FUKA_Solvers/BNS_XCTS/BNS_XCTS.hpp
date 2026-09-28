@@ -103,6 +103,47 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
     void checkpoint(bool termination_chkpt = false) const;
     void print_diagnostics(const int ite, const double conv) override;
     std::string converged_filename(const std::string stage) const override;
+
+    bool solution_exists() {
+        bool exists = false;
+        std::string prev_name{converged_filename(stagename)};
+        std::string prev_abs{bconfig->config_outputdir() + prev_name};
+
+        auto check_and_update_config = [&](auto p) {
+            exists = true;
+            base_config_t old_solution(p + ".info");
+
+            if (bconfig->set(BCO_PARAMS::NSHELLS, NODES::BCO1) !=
+                    old_solution.set(BCO_PARAMS::NSHELLS, NODES::BCO1) ||
+                bconfig->set(BCO_PARAMS::NSHELLS, NODES::BCO2) !=
+                    old_solution.set(BCO_PARAMS::NSHELLS, NODES::BCO2))
+                return false;
+
+            // make sure we copy stages, controls, and settings over
+            for (auto idx = 0; idx < STAGES::NUM_STAGES; ++idx)
+                old_solution.set_stage(idx) = bconfig->set_stage(idx);
+            for (auto idx : CONTROLS_ARY)
+                old_solution.control(idx) = bconfig->control(idx);
+            for (auto idx = 0; idx < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++idx)
+                old_solution.seq_setting(idx) = bconfig->seq_setting(idx);
+
+            auto& stages = bconfig->return_stages();
+            auto [last_stage_name, last_stage_idx] =
+                get_last_enabled(MSTAGE, stages);
+            if (solver_stage != last_stage_idx)
+                // Deactivate current stage since we found solution
+                old_solution.set_stage(solver_stage) = false;
+            *bconfig = old_solution;
+            return exists;
+        };
+
+        /// Check based on current output directory
+        if (fs::exists(prev_abs + ".info") && fs::exists(prev_abs + ".dat")) {
+            exists = check_and_update_config(prev_abs);
+        }
+
+        return exists;
+    }
 };
 
 template <class eos_t>
