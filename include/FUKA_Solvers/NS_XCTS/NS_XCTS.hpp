@@ -91,7 +91,7 @@ struct NS_XCTS_BASE {
     virtual std::string converged_filename(const std::string stage) const = 0;
 
    protected:
-    void load_solution_from_file();
+    virtual void load_solution_from_file();
     void initialize_support_containers();
     virtual void reset_all_ptrs();
     virtual void update_config_quantities() = 0;

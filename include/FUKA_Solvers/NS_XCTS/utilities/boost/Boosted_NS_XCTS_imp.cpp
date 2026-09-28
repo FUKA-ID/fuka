@@ -14,9 +14,6 @@ Boosted_NS_XCTS<eos_t>::Boosted_NS_XCTS(
 
     if (binary_config_ != nullptr) {
         binary_config.reset(binary_config_);
-        phi.reset(new Kadath::Scalar(*space));
-        phi->annule_hard();
-        phi->std_base();
         std::stringstream stage_ss;
         stage_ss << "BIN_BOOST_" << (*binary_config)(BIN_PARAMS::DIST) << "_"
                  << (*binary_config)(BIN_PARAMS::GOMEGA);
@@ -190,5 +187,28 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
                       OUTER_BC,
                       "integ(intS) - chi * Madm * Madm = 0");
     space->add_eq_int_volume(*syst, 2, "integvolume(intMb) = Mb");
+}
+
+template <class eos_t>
+void Boosted_NS_XCTS<eos_t>::load_solution_from_file() {
+    std::string spacein{bconfig->space_filename()};
+    FILE* ff1 = fopen(spacein.c_str(), "r");
+
+    this->space.reset(new base_space_t{ff1});
+    this->conformal_factor.reset(new Scalar(*space, ff1));
+    this->lapse.reset(new Scalar(*space, ff1));
+    this->shift.reset(new Vector(*space, ff1));
+    this->logh.reset(new Scalar(*space, ff1));
+
+    if (bconfig->field(Kadath::FUKA_Config::BCO_FIELDS::PHI)) {
+        phi.reset(new Scalar(*space.get(), ff1));
+    } else if (binary_config) {
+        phi.reset(new Kadath::Scalar(*space));
+        phi->annule_hard();
+        phi->std_base();
+    }
+    fclose(ff1);
+
+    ndom = space->get_nbr_domains();
 }
 }  // namespace Kadath::FUKA_Solvers

@@ -27,6 +27,7 @@ struct Boosted_NS_XCTS : public NS_XCTS_UNIFORM_ROT<eos_t> {
         Kadath::FUKA_Config::kadath_config_boost<Kadath::FUKA_Config::BIN_INFO>;
 
     using typename NS_XCTS_UNIFORM_ROT<eos_t>::base_config_t;
+    using typename NS_XCTS_UNIFORM_ROT<eos_t>::base_space_t;
     using NS_XCTS_UNIFORM_ROT<eos_t>::syst;
     using NS_XCTS_UNIFORM_ROT<eos_t>::bconfig;
     using NS_XCTS_UNIFORM_ROT<eos_t>::syst_init;
@@ -44,6 +45,9 @@ struct Boosted_NS_XCTS : public NS_XCTS_UNIFORM_ROT<eos_t> {
     ptr_data_member(Kadath::Scalar, phi, unique);
 
     internal_variable(double, H_scale);
+
+   protected:
+    void load_solution_from_file() override;
 
    public:
     Boosted_NS_XCTS() = default;
