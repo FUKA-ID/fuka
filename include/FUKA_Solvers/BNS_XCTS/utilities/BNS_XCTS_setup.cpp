@@ -1,5 +1,5 @@
 #include "FUKA_Solvers/utilities/compact_object_drivers/solve_BH_for_binary.hpp"
-#include "FUKA_Solvers/utilities/compact_object_drivers/solve_NS_for_binary.hpp"
+#include "FUKA_Solvers/utilities/compact_object_drivers/solve_NS_for_binary_v2.hpp"
 #include "FUKA_Solvers/utilities/config_utils.hpp"
 #include "FUKA_Solvers/utilities/scalar_calculations.hpp"
 #include "FUKA_Solvers/utilities/simple_calculations.hpp"
@@ -62,8 +62,8 @@ void BNS_XCTS_setup_space(config_t& bconfig) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     std::array<std::string, 2> filenames;
 
-    filenames[0] = solve_NS_for_binary(bconfig, NODES::BCO1);
-    filenames[1] = solve_NS_for_binary(bconfig, NODES::BCO2);
+    filenames[0] = solve_NS_for_binary_v2(bconfig, NODES::BCO1);
+    filenames[1] = solve_NS_for_binary_v2(bconfig, NODES::BCO2);
 
     // debugging only
     for (auto& f : filenames)
@@ -129,11 +129,10 @@ struct BNS_XCTS_setup_boosted_3d {
         update_config_NS_radii(spacein2, NS2config, 1);
 
         // update NS parameters in binary config
-        for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
+        for (auto i : BCO_PARAMS_ARY) {
             bconfig.set(i, NODES::BCO1) = NS1config.set(i);
-
-        for (int i = 0; i < BCO_PARAMS::NUM_BCO_PARAMS; ++i)
             bconfig.set(i, NODES::BCO2) = NS2config.set(i);
+        }
 
         auto gen_radius_field =
             [&](auto& spacein, auto& old_space_radius, const int ndomin) {

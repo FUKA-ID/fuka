@@ -14,7 +14,7 @@
  */
 namespace Kadath::FUKA_Solvers {
 template <typename config_t>
-std::string solve_NS_for_binary_v2(config_t& bconfig, const size_t bco) {
+std::string solve_NS_for_binary_v2(config_t& bconfig, const NODES bco) {
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     std::string output_path = (bconfig.control(CONTROLS::SAVE_COS))
