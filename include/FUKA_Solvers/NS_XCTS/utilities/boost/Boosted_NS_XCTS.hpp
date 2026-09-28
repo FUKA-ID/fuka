@@ -36,10 +36,12 @@ struct Boosted_NS_XCTS : public NS_XCTS_UNIFORM_ROT<eos_t> {
     using NS_XCTS_UNIFORM_ROT<eos_t>::stagename;
     using NS_XCTS_UNIFORM_ROT<eos_t>::coord_vectors;
     using NS_XCTS_UNIFORM_ROT<eos_t>::cfields;
+    using NS_XCTS_UNIFORM_ROT<eos_t>::rank;
+    using NS_XCTS_UNIFORM_ROT<eos_t>::reload;
+    using NS_XCTS_UNIFORM_ROT<eos_t>::solution_exists;
 
     ptr_data_member(binary_config_t, binary_config, unique);
     ptr_data_member(Kadath::Scalar, phi, unique);
-    ptr_data_member(Kadath::Scalar, logh_const, unique);
 
     internal_variable(double, H_scale);
 

@@ -367,6 +367,7 @@ int NS_XCTS_BASE::do_newton() {
     if (rank == 0) {
         checkpoint();
     }
+    syst.reset(nullptr);
     MPI_Barrier(MPI_COMM_WORLD);
     return exit_status;
 }

@@ -17,8 +17,6 @@ Boosted_NS_XCTS<eos_t>::Boosted_NS_XCTS(
         phi.reset(new Kadath::Scalar(*space));
         phi->annule_hard();
         phi->std_base();
-        logh_const.reset(new Kadath::Scalar(*(this->logh)));
-        logh_const->std_base();
         std::stringstream stage_ss;
         stage_ss << "BIN_BOOST_" << (*binary_config)(BIN_PARAMS::DIST) << "_"
                  << (*binary_config)(BIN_PARAMS::GOMEGA);
@@ -29,6 +27,7 @@ Boosted_NS_XCTS<eos_t>::Boosted_NS_XCTS(
 template <class eos_t>
 void Boosted_NS_XCTS<eos_t>::save_to_file() const {
     bconfig->set_outputdir(this->outputdir);
+    Scalar rescaled_logh(syst->give_val_def("H")());
     if (this->diff_omega) {
         bconfig->set_field(Kadath::FUKA_Config::BCO_FIELDS::DIFF_OMEGA) = true;
         Kadath::bco_utils::save_to_file(*this->space,
@@ -36,7 +35,7 @@ void Boosted_NS_XCTS<eos_t>::save_to_file() const {
                                         *this->conformal_factor,
                                         *this->lapse,
                                         *this->shift,
-                                        *this->logh,
+                                        rescaled_logh,
                                         *this->phi,
                                         *this->diff_omega);
     } else {
@@ -45,13 +44,32 @@ void Boosted_NS_XCTS<eos_t>::save_to_file() const {
                                         *this->conformal_factor,
                                         *this->lapse,
                                         *this->shift,
-                                        *this->logh,
+                                        rescaled_logh,
                                         *this->phi);
     }
 }
 
 template <class eos_t>
 void Boosted_NS_XCTS<eos_t>::setup_syst() {
+    if (this->rank == 0) {
+        std::cout << "############################" << std::endl
+                  << "Boosted Rigid NS Solver" << std::endl
+                  << "Fixing parameters:\n"
+                  << "Madm: " << (*bconfig)(BCO_PARAMS::MADM) << std::endl
+                  << "Mb: " << (*bconfig)(BCO_PARAMS::MB) << std::endl
+                  << "Chi: " << (*bconfig)(BCO_PARAMS::CHI) << std::endl
+                  << "############################" << std::endl;
+    }
+    // We use `config_filename()` vs `config_filename_abs()` since
+    // `solution_exists` will probe the HOME_KADATH/COs directory
+    auto const current = bconfig->config_filename();
+    if (!bconfig->control(RESOLVE) && solution_exists()) {
+        if (rank == 0) {
+            std::cout << "Solved previously: " << bconfig->config_filename_abs()
+                      << std::endl;
+        }
+        reload();
+    }
 
     // flag needs to be set in order to be used during import into
     // a BNS or BHNS setup
@@ -62,7 +80,7 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
 
     syst->add_var("phi", *phi);
 
-    syst->add_cst("Hconst", *logh_const);
+    syst->add_cst("Hconst", *(this->logh));
     syst->add_var("Hscale", H_scale);
     for (int d = 0; d < ndom; d++)
         // the enthalpy is equal to the constant part everywhere
@@ -88,16 +106,6 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
     for (int d = 0; d <= 1; ++d) {
         syst->add_def(d, "s^i  = ome * mg^i");
         syst->add_def(d, "eta_i  = D_i phi + P^4 * s_i");
-    }
-
-    if (this->rank == 0) {
-        std::cout << "############################" << std::endl
-                  << "Boosted Rigid NS Solver" << std::endl
-                  << "Fixing parameters:\n"
-                  << "Madm: " << (*bconfig)(BCO_PARAMS::MADM) << std::endl
-                  << "Mb: " << (*bconfig)(BCO_PARAMS::MB) << std::endl
-                  << "Chi: " << (*bconfig)(BCO_PARAMS::CHI) << std::endl
-                  << "############################" << std::endl;
     }
 
     for (int d = 0; d < ndom; d++) {
