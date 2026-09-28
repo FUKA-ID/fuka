@@ -196,7 +196,7 @@ const std::map<std::string, STAGES> MBHSTAGE = {
 };
 const std::map<std::string, STAGES> MNSSTAGE = {
     {"norot_bc", NOROT_BC},
-    {"total_bc", TOTAL_BC},
+    {"total_bc", UNIFORM_ROT},
 };
 const std::map<std::string, STAGES> M2DNSSTAGE = {
     {"norot_bc", NOROT_BC},

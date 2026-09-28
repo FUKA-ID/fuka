@@ -413,8 +413,6 @@ inline int NS_XCTS_binary_boost_driver(config_t& bconfig,
     const std::string eos_type =
         bconfig.template eos<std::string>(EOS_PARAMS::EOSTYPE);
 
-    const int final_res = bconfig(BCO_PARAMS::BCO_RES);
-    bool res_inc = (bconfig.seq_setting(SEQ_SETTINGS::INIT_RES) < final_res);
     bconfig.set(BCO_PARAMS::BCO_RES) = resolution.init();
 
     // Obtain stationary solution
