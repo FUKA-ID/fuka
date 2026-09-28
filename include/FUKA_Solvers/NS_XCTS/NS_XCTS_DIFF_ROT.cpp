@@ -17,9 +17,8 @@ NS_XCTS_DIFF_ROT<eos_t>::NS_XCTS_DIFF_ROT(
     if (!seq->is_set() && !bconfig->control(CONTROLS::SEQUENCES)) {
         initialize_config_from_fixing_values(*bconfig, *seq);
     }
-    load_solution_from_file();
+    reload();
     initialize_EOS(*this);
-    initialize_support_containers();
     initialize_diffrot_params();
     initialize_spinup();
 
@@ -72,14 +71,14 @@ void NS_XCTS_DIFF_ROT<eos_t>::setup_syst() {
 
     // We use `config_filename()` vs `config_filename_abs()` since
     // `solution_exists` will probe the HOME_KADATH/COs directory
-    // auto const current = bconfig.config_filename();
-    // if(!bconfig.control(RESOLVE) && solution_exists(stagename)) {
-    //   if(rank == 0)
-    //     std::cout << "Solved previously: " \
-    //               << bconfig.config_filename_abs() << std::endl;
-    //   return (current == bconfig.config_filename()) ? \
-    //     EXIT_SUCCESS : RELOAD_FILE;
-    // }
+    auto const current = bconfig->config_filename();
+    if (!bconfig->control(RESOLVE) && solution_exists()) {
+        if (rank == 0) {
+            std::cout << "Solved previously: " << bconfig->config_filename_abs()
+                      << std::endl;
+        }
+        reload();
+    }
 
     initialize_diffrot_params();
     // Update vector fields

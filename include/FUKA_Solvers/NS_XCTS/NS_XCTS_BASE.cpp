@@ -263,9 +263,7 @@ inline void NS_XCTS_BASE::regrid() {
     bconfig->open_config();
 
     // Update stored fields and containers
-    reset_all_ptrs();
-    load_solution_from_file();
-    initialize_support_containers();
+    reload();
 }
 
 void NS_XCTS_BASE::load_solution_from_file() {
