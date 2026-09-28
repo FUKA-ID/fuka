@@ -313,7 +313,7 @@ void verify_resolution_sequence(config_t& bconfig, Res_t& resolution) {
     auto init_res = (std::isnan(bconfig.seq_setting(SEQ_SETTINGS::INIT_RES)))
                         ? 9
                         : bconfig.seq_setting(SEQ_SETTINGS::INIT_RES);
-
+    init_res = std::max(init_res, bconfig(resolution.get_indices()));
     // Determine highest resolution
     auto final_res = (resolution.is_default_set()) ? resolution.default_val()
                                                    : init_res;
