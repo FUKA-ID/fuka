@@ -37,13 +37,6 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
     using cfary_t = std::array<std::optional<Vector>, NUM_VECTORS>;
 
    protected:
-    void populate_domain_support_containers() {
-        // Set space specific quantities
-        xc1 = bco_utils::get_center(*space, space->NS1);
-        xc2 = bco_utils::get_center(*space, space->NS2);
-        xo = bco_utils::get_center(*space, ndom - 1);
-    }
-
     // EOS Parameters - Perhaps this should be a container?
     internal_variable(double, h_cut);
     internal_variable(std::string, eos_file);
@@ -97,7 +90,7 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
 
    protected:
     // Initialization Methods
-    void initialize_support_containers();
+    void initialize_support_containers() override;
 
     // I/O Methods
     void save_solution_to_file() const override;
@@ -121,11 +114,9 @@ struct BNS_XCTS : public BNS_XCTS_base {
              std::string outputdir_,
              int const rank_)
         : BNS_XCTS_base(config_, ns1_seq_, ns2_seq_, res_, outputdir_, rank_) {
-        load_solution_from_file();
-        initialize_EOS(*this, NODES::BCO1);
-        initialize_support_containers();
+        reload();
 
-        populate_domain_support_containers();
+        initialize_EOS(*this, NODES::BCO1);
     }
 
    private:

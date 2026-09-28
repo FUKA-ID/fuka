@@ -263,8 +263,6 @@ inline void BNS_XCTS_base::regrid() {
     bconfig->open_config();
 
     // Update stored fields and containers
-    reset_all_ptrs();
-    load_solution_from_file();
-    initialize_support_containers();
+    reload();
 }
 }  // namespace Kadath::FUKA_Solvers

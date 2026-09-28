@@ -104,6 +104,10 @@ inline void BNS_XCTS_base::initialize_support_containers() {
     cfields.reset(new cfgen_t(*space));
     coord_vectors =
         std::make_unique<cfary_t>(default_binary_vector_ary(*space));
+
+    xc1 = bco_utils::get_center(*space, space->NS1);
+    xc2 = bco_utils::get_center(*space, space->NS2);
+    xo = bco_utils::get_center(*space, ndom - 1);
 }
 
 inline void BNS_XCTS_base::save_solution_to_file() const {
