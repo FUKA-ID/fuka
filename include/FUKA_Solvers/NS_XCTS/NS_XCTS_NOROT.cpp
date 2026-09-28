@@ -1,6 +1,6 @@
 #include "FUKA_Solvers/utilities/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver_utilities.hpp"
 #include "Solvers/fuka_syst/fuka_syst_setup.hpp"
-#include "utilities/solver_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
 // NOROT Routines
@@ -16,9 +16,8 @@ NS_XCTS_NOROT<eos_t>::NS_XCTS_NOROT(NS_XCTS_BASE::base_config_t* config_,
     if (!seq->is_set() && !bconfig->control(CONTROLS::SEQUENCES)) {
         initialize_config_from_fixing_values(*bconfig, *seq);
     }
-    load_solution_from_file();
+    reload();
     initialize_EOS(*this);
-    initialize_support_containers();
     if (rank == 0)
         cout << *seq << endl;
 }
@@ -61,17 +60,18 @@ void NS_XCTS_NOROT<eos_t>::setup_syst() {
 
     // We use `config_filename()` vs `config_filename_abs()` since
     // `solution_exists` will probe the HOME_KADATH/COs directory
-    // auto const current = bconfig.config_filename();
-    // if(!bconfig.control(RESOLVE) && solution_exists(stagename)) {
-    //   if(rank == 0)
-    //     std::cout << "Solved previously: " \
-    //               << bconfig.config_filename_abs() << std::endl;
-    //   return (current == bconfig.config_filename()) ? \
-    //     EXIT_SUCCESS : RELOAD_FILE;
-    // }
+    auto const current = bconfig->config_filename();
+    if (!bconfig->control(RESOLVE) && solution_exists()) {
+        if (rank == 0) {
+            std::cout << "Solved previously: " << bconfig->config_filename_abs()
+                      << std::endl;
+        }
+        reload();
+    }
 
     update_fields_co(*cfields, *coord_vectors, {}, 0.);
     syst.reset(new System_of_eqs(*space));
+    syst->add_var("H", *logh);
     syst_init();
     for (int d = 0; d < ndom; d++) {
         if (d <= 1) {
@@ -176,7 +176,6 @@ void NS_XCTS_NOROT<eos_t>::syst_init() {
     // the basic fields, conformal factor, lapse and (log) enthalpy
     syst->add_var("P", *conformal_factor);
     syst->add_var("N", *lapse);
-    syst->add_var("H", *logh);
 
     // define common combinations of conformal factor and lapse
     syst->add_def("NP = P*N");
@@ -244,7 +243,6 @@ void NS_XCTS_NOROT<eos_t>::print_diagnostics(const int ite,
               << "]" << std::endl;
     std::cout << FORMAT << "R: " << rs[0] << " " << rs[1] << "\n";
     std::cout.flags(f);
-#undef FORMAT
     std::cout << "=======================================" << "\n\n";
 }  // end print diagnostics norot
 

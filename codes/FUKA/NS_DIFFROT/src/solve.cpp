@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "FUKA_Solvers/NS_XCTS_driver.cpp"
+#include "FUKA_Solvers/NS_XCTS/NS_XCTS_driver.hpp"
 #include "FUKA_Solvers/utilities/solver_startup.hpp"
 #include "Solvers/sequences/ns_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
@@ -55,7 +55,6 @@ int main(int argc, char** argv) {
             // Generate <example name>.info and terminate
             if (InitSolver::minimal_config) {
                 bconfig.set_minimal_defaults();
-                bconfig.set_stage(STAGES::TOTAL_BC) = false;
                 bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
                 bconfig.set_stage(STAGES::DIFF_ROT) = true;
                 bconfig.control(CONTROLS::SEQUENCES) = InitSolver::setup_first;
@@ -64,7 +63,6 @@ int main(int argc, char** argv) {
                 bconfig.write_minimal_config();
             } else {
                 bconfig.set_defaults();
-                bconfig.set_stage(STAGES::TOTAL_BC) = false;
                 bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
                 bconfig.set_stage(STAGES::DIFF_ROT) = true;
                 bconfig.control(CONTROLS::SEQUENCES) = InitSolver::setup_first;
@@ -107,7 +105,7 @@ int main(int argc, char** argv) {
 
         verify_ns_fixing_values(bconfig, seq);
         initialize_config_from_fixing_values(bconfig, seq);
-        ns_xcts_driver(bconfig, seq, resolution, InitSolver::outputdir);
+        NS_XCTS_driver(bconfig, seq, resolution, InitSolver::outputdir);
     }
     MPI_Finalize();
     return EXIT_SUCCESS;

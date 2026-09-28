@@ -49,7 +49,7 @@ struct NS_XCTS_BASE {
     internal_variable(std::string, outputdir)
     internal_variable(int, last_stage_idx)
     internal_variable(std::string, stagename)
-    STAGES solver_stage{STAGES::NUM_STAGES};
+    internal_variable(STAGES, solver_stage);
 
     // EOS Parameters - Perhaps this should be a container?
     internal_variable(double, h_cut);
@@ -82,7 +82,7 @@ struct NS_XCTS_BASE {
                  Parameter_sequence<BCO_PARAMS> const& res_,
                  std::string outputdir_,
                  int const rank_ = 0);
-    void save_to_file() const;
+    virtual void save_to_file() const;
     bool increment_resolution();
     bool increment_seq();
     int do_newton();
@@ -91,7 +91,7 @@ struct NS_XCTS_BASE {
     virtual std::string converged_filename(const std::string stage) const = 0;
 
    protected:
-    void load_solution_from_file();
+    virtual void load_solution_from_file();
     void initialize_support_containers();
     virtual void reset_all_ptrs();
     virtual void update_config_quantities() = 0;
@@ -125,16 +125,75 @@ struct NS_XCTS_BASE {
             throw std::runtime_error(ss.str().c_str());
         }
     }
+
+    /**
+   * @brief Branch for handling finding a previous solution
+   *
+   * @return bool
+   */
+    template <class... idx_t>
+    bool solution_exists(idx_t... bco) {
+        bool exists = false;
+        std::string prev_name{converged_filename(stagename)};
+        std::string prev_abs{bconfig->config_outputdir() + prev_name};
+
+        const std::string home_kadath{std::getenv("HOME_KADATH")};
+        std::string central_abs{home_kadath + "/COs/" + prev_name};
+
+        auto check_and_update_config = [&](auto p) {
+            exists = true;
+            base_config_t old_solution(p + ".info");
+            if (bconfig->set(BCO_PARAMS::NSHELLS, bco...) !=
+                old_solution.set(BCO_PARAMS::NSHELLS, bco...))
+                return false;
+
+            // make sure we copy stages, controls, and settings over
+            for (auto idx = 0; idx < STAGES::NUM_STAGES; ++idx)
+                old_solution.set_stage(idx) = bconfig->set_stage(idx);
+            for (auto idx : CONTROLS_ARY)
+                old_solution.control(idx) = bconfig->control(idx);
+            for (auto idx = 0; idx < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++idx)
+                old_solution.seq_setting(idx) = bconfig->seq_setting(idx);
+
+            auto& stages = bconfig->return_stages();
+            auto [last_stage_name, last_stage_idx] =
+                get_last_enabled(MSTAGE, stages);
+            if (solver_stage != last_stage_idx)
+                // Deactivate current stage since we found solution
+                old_solution.set_stage(solver_stage) = false;
+            *bconfig = old_solution;
+            return exists;
+        };
+
+        /// Check based on current output directory
+        if (fs::exists(prev_abs + ".info") && fs::exists(prev_abs + ".dat")) {
+            exists = check_and_update_config(prev_abs);
+        }
+        /// Check based on global output directory
+        else if (bconfig->control(SAVE_COS) &&
+                 fs::exists(central_abs + ".info") &&
+                 fs::exists(central_abs + ".dat")) {
+            exists = check_and_update_config(central_abs);
+        }
+
+        return exists;
+    }
+
+    void reload() {
+        reset_all_ptrs();
+        load_solution_from_file();
+        initialize_support_containers();
+    }
 };
 
 template <class eos_t>
 struct NS_XCTS_NOROT : NS_XCTS_BASE {
    private:
-    void syst_init();
     void print_diagnostics(const int ite, const double conv) const override;
     void update_config_quantities() override;
 
    public:
+    void syst_init();
     void setup_syst();
     std::string converged_filename(const std::string stage) const override;
 
@@ -150,13 +209,13 @@ struct NS_XCTS_NOROT : NS_XCTS_BASE {
 template <class eos_t>
 struct NS_XCTS_UNIFORM_ROT : NS_XCTS_BASE {
    private:
-    void syst_init();
     void print_diagnostics(const int ite, const double conv) const override;
     void update_config_quantities() override;
     void initialize_spinup();
     ptr_data_member(Parameter_sequence<BCO_PARAMS>, spinup, unique);
 
    public:
+    void syst_init();
     void setup_syst();
     bool increment_spin();
     std::string converged_filename(const std::string stage) const;
@@ -172,7 +231,6 @@ struct NS_XCTS_UNIFORM_ROT : NS_XCTS_BASE {
 template <class eos_t>
 struct NS_XCTS_DIFF_ROT : NS_XCTS_BASE {
    private:
-    void syst_init();
     void print_diagnostics(const int ite, const double conv) const override;
     void update_config_quantities() override;
     void initialize_spinup();
@@ -191,6 +249,7 @@ struct NS_XCTS_DIFF_ROT : NS_XCTS_BASE {
     internal_variable(std::string, law);
 
    public:
+    void syst_init();
     void setup_syst();
     bool increment_spin();
     std::string converged_filename(const std::string stage) const;

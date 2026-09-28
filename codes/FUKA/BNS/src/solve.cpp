@@ -20,11 +20,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "FUKA_Solvers/BNS_XCTS/BNS_XCTS_driver.hpp"
+#include "FUKA_Solvers/BNS_XCTS/utilities/BNS_XCTS_setup.hpp"
 #include "FUKA_Solvers/utilities/solver_startup.hpp"
-#include "Solvers/bns_xcts/bns_xcts_driver.hpp"
-#include "Solvers/bns_xcts/bns_xcts_setup.hpp"
-#include "Solvers/bns_xcts/bns_xcts_solver.hpp"
+#include "Solvers/sequences/bco_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
+#include "Solvers/sequences/sequence_utilities.hpp"
 #include "mpi.h"
 using namespace Kadath::FUKA_EOS;
 
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
             if (InitSolver::minimal_config) {
                 bconfig.write_minimal_config();
             } else {
-                solvers::bns_xcts_setup_bin_config(bconfig);
+                solvers::BNS_XCTS_setup_bin_config(bconfig);
                 bconfig.write_config();
             }
         }
@@ -89,14 +90,18 @@ int main(int argc, char** argv) {
             solvers::parse_seq_tree(tree, "binary", "res", BIN_PARAMS::BIN_RES);
         solvers::verify_resolution_sequence(bconfig, resolution);
 
+        auto ns1_params = solvers::find_fixing_values_binary(tree, NODES::BCO1);
+        auto ns2_params = solvers::find_fixing_values_binary(tree, NODES::BCO2);
+
         auto seq = solvers::find_sequence_binary(tree);
         auto seq_bin = solvers::find_sequence(tree, MBIN_PARAMS, "binary");
 
         if (!(seq.is_set() || seq_bin.is_set()) &&
             !bconfig.control(CONTROLS::SEQUENCES))
-            err = bns_xcts_driver(bconfig, resolution, InitSolver::outputdir);
+            err = solvers::BNS_XCTS_solution_driver(bconfig, resolution,
+                                                 ns1_params,
+                                                 ns2_params, InitSolver::outputdir);
         else {
-
             auto [branch_name, key, val] = find_leaf(tree, "N");
             if (!key.empty()) {
                 seq.set_N(std::stoi(val));
@@ -108,9 +113,11 @@ int main(int argc, char** argv) {
                               << std::endl
                               << seq << std::endl;
                 }
-                err = solvers::bns_xcts_sequence(bconfig,
+                err = solvers::BNS_XCTS_sequence(bconfig,
                                                  seq,
                                                  resolution,
+                                                 ns1_params,
+                                                 ns2_params,
                                                  InitSolver::outputdir);
             } else {
                 if (rank == 0) {
@@ -118,9 +125,11 @@ int main(int argc, char** argv) {
                               << std::endl
                               << seq_bin << std::endl;
                 }
-                err = solvers::bns_xcts_sequence(bconfig,
+                err = solvers::BNS_XCTS_sequence(bconfig,
                                                  seq_bin,
                                                  resolution,
+                                                 ns1_params,
+                                                 ns2_params,
                                                  InitSolver::outputdir);
             }
         }

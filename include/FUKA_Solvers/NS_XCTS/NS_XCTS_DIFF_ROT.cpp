@@ -1,6 +1,6 @@
 #include "FUKA_Solvers/utilities/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver_utilities.hpp"
 #include "Solvers/fuka_syst/fuka_syst_setup.hpp"
-#include "utilities/solver_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
 // NOROT Routines
@@ -17,9 +17,8 @@ NS_XCTS_DIFF_ROT<eos_t>::NS_XCTS_DIFF_ROT(
     if (!seq->is_set() && !bconfig->control(CONTROLS::SEQUENCES)) {
         initialize_config_from_fixing_values(*bconfig, *seq);
     }
-    load_solution_from_file();
+    reload();
     initialize_EOS(*this);
-    initialize_support_containers();
     initialize_diffrot_params();
     initialize_spinup();
 
@@ -56,7 +55,8 @@ std::string NS_XCTS_DIFF_ROT<eos_t>::converged_filename(
     if (law == "keh") {
         ss << "Ar."
            << (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_ARATIO)
-           << "." << "Rr."
+           << "."
+           << "Rr."
            << (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_RRATIO)
            << ".";
     }
@@ -71,14 +71,14 @@ void NS_XCTS_DIFF_ROT<eos_t>::setup_syst() {
 
     // We use `config_filename()` vs `config_filename_abs()` since
     // `solution_exists` will probe the HOME_KADATH/COs directory
-    // auto const current = bconfig.config_filename();
-    // if(!bconfig.control(RESOLVE) && solution_exists(stagename)) {
-    //   if(rank == 0)
-    //     std::cout << "Solved previously: " \
-    //               << bconfig.config_filename_abs() << std::endl;
-    //   return (current == bconfig.config_filename()) ? \
-    //     EXIT_SUCCESS : RELOAD_FILE;
-    // }
+    auto const current = bconfig->config_filename();
+    if (!bconfig->control(RESOLVE) && solution_exists()) {
+        if (rank == 0) {
+            std::cout << "Solved previously: " << bconfig->config_filename_abs()
+                      << std::endl;
+        }
+        reload();
+    }
 
     initialize_diffrot_params();
     // Update vector fields
@@ -104,10 +104,12 @@ void NS_XCTS_DIFF_ROT<eos_t>::setup_syst() {
                   << "Fixed Rp / Re: " << diffRratio << std::endl
                   << "Initial Rp/Re: " << Rp / R0 << "\n"
                   << "Initial R0: " << R0 << std::endl
-                  << "###################################" << "\n\n";
+                  << "###################################"
+                  << "\n\n";
     }
     // Setup System of equations
     syst.reset(new System_of_eqs(*space));
+    syst->add_var("H", *logh);
     syst_init();
 
     // Setup mass fixing parameter
@@ -253,7 +255,6 @@ void NS_XCTS_DIFF_ROT<eos_t>::syst_init() {
     // the basic fields, conformal factor, lapse and (log) enthalpy
     syst->add_var("P", *conformal_factor);
     syst->add_var("N", *lapse);
-    syst->add_var("H", *logh);
     syst->add_var("bet", *shift);
 
     // define common combinations of conformal factor and lapse
@@ -340,7 +341,6 @@ void NS_XCTS_DIFF_ROT<eos_t>::print_diagnostics(const int ite,
               << FORMAT << "Omega: " << (*bconfig)(OMEGA) << std::endl
               << FORMAT << "diff_A: " << diffA << std::endl;
     std::cout.flags(f);
-#undef FORMAT
     std::cout << "=======================================" << "\n\n";
 }  // end print diagnostics norot
 

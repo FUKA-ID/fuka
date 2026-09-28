@@ -1,5 +1,5 @@
+#include "FUKA_Solvers/utilities/solver_utilities.hpp"
 #include "bco_utilities.hpp"
-#include "utilities/solver_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
 
@@ -263,9 +263,7 @@ inline void NS_XCTS_BASE::regrid() {
     bconfig->open_config();
 
     // Update stored fields and containers
-    reset_all_ptrs();
-    load_solution_from_file();
-    initialize_support_containers();
+    reload();
 }
 
 void NS_XCTS_BASE::load_solution_from_file() {
@@ -369,6 +367,7 @@ int NS_XCTS_BASE::do_newton() {
     if (rank == 0) {
         checkpoint();
     }
+    syst.reset(nullptr);
     MPI_Barrier(MPI_COMM_WORLD);
     return exit_status;
 }
