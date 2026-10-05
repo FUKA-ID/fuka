@@ -1,5 +1,5 @@
 
-project(FUKA VERSION 2.4.3)
+project(FUKA VERSION 2.4.4)
 find_package(Git QUIET)
 
 set(GIT_HASH "unknown")
