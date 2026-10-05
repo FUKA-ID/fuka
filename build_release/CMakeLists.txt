@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.12)  # Ensure the policy exists
 cmake_policy(SET CMP0074 NEW)        # Use the new behavior
+cmake_policy(SET CMP0167 NEW)
+cmake_policy(SET CMP0144 NEW)
 project(Kadath_release)
 if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "No build type selected, default to Release")
@@ -19,7 +21,18 @@ else(PAR_VERSION)
 	message ("Sequential version")
 endif(PAR_VERSION)
 
+# Needed for Matrix calculations
+find_package(GSL REQUIRED)
+include_directories(${GSL_INCLUDE_DIR})
+
+# Needed for Configurator
+find_package(Boost REQUIRED)
+include_directories(${Boost_INCLUDE_DIRS})
+
 set(CMAKE_MODULE_PATH $ENV{HOME_KADATH}/build_release)
+
+# Needed to generate FUKA version file
+include($ENV{HOME_KADATH}/Cmake/CMake_FUKA_meta.cmake)
 
 option(GRHAYL_EOS "Use GRHaYL EOS library" OFF)
 if(GRHAYL_EOS)
