@@ -45,6 +45,20 @@ namespace Kadath {
 class Point ;
 
 /**
+* Whether theta coefficient \c j of an \c m = 0 \c COS_EVEN series is the top one.
+* Its theta derivative is the top \c SIN_EVEN coefficient, which vanishes at every
+* collocation point, so the mode lies in the kernel of the discrete Laplacian. It is
+* therefore neither an unknown nor a condition (FUKA issue #14).
+* @param baset : basis in theta.
+* @param mquant : azimuthal quantum number m.
+* @param j : index of the theta coefficient.
+* @param nt : number of theta coefficients.
+*/
+inline bool is_null_theta_mode (int baset, int mquant, int j, int nt) {
+	return (baset==COS_EVEN) && (mquant==0) && (j==nt-1) ;
+}
+
+/**
 * Class for storing the basis of decompositions of a field.
 *
 * It mainly consists in a list of integers, encoding the various basis.

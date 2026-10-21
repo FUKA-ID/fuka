@@ -1130,6 +1130,22 @@ class Domain : public MemoryMappable {
 	*/
      virtual int nbr_unknowns (const Tensor& so, int dom) const ;
 	/**
+	* Sets to zero the coefficients of a \c Tensor that \c is_null_theta_mode excludes from the
+	* unknowns. The Newton update leaves coefficients that are not unknowns unchanged, so they must
+	* be removed from the variables once. Does nothing in domains without such modes.
+	* @param so : the tensorial field, modified in domain \c dom.
+	* @param dom : the domain considered (should be the same as num_dom).
+	*/
+     virtual void zero_null_theta_mode (Tensor&, int) const {} ;
+	/**
+	* Sets to zero the top theta coefficient of the axisymmetric (first phi index) part of every
+	* component of a \c Tensor, where \c is_null_theta_mode applies.
+	* @param so : the tensorial field, modified in domain \c dom.
+	* @param dom : the domain considered (should be the same as num_dom).
+	* @param mquant : azimuthal quantum number m of \c so.
+	*/
+     void zero_top_theta_coef (Tensor& so, int dom, int mquant) const ;
+	/**
 	* Computes number of discretized equations associated with a given tensorial equation in the bulk.
 	* It takes into account the various Galerkin basis used.
 	* @param eq : the residual of the equation.

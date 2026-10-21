@@ -35,6 +35,8 @@ int Domain_nucleus::nbr_unknowns_val_domain_vr (const Val_domain& so) const {
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (pos(2)) ;
+		if (is_null_theta_mode (baset, pos(2)/2, pos(1), nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case COS_EVEN:
 						if ((pos(1)==0) && (pos(2)!=0))
@@ -102,6 +104,8 @@ int Domain_nucleus::nbr_unknowns_val_domain_vt (const Val_domain& so) const {
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (pos(2)) ;
+		if (is_null_theta_mode (baset, pos(2)/2, pos(1), nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case SIN_EVEN:
 						if ((pos(1)==nbr_coefs(1)-1) || (pos(1)==0))
@@ -173,6 +177,8 @@ int Domain_nucleus::nbr_unknowns_val_domain_vp (const Val_domain& so) const {
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (pos(2)) ;
+		if (is_null_theta_mode (baset, pos(2)/2, pos(1), nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case COS_EVEN:
 						if ((pos(2)>3) && (pos(1)==0))
@@ -251,6 +257,8 @@ int Domain_nucleus::nbr_unknowns_val_domain (const Val_domain& so, int mlim, int
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (pos(2)) ;
+		if (is_null_theta_mode (baset, pos(2)/2, pos(1), nbr_coefs(1)))
+			indic = false ;
 		int lquant ;
 		switch (baset) {
 					case COS_EVEN:

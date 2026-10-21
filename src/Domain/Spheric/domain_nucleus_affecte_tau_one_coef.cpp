@@ -46,6 +46,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vr (Val_domain& so, int cc,
 	for (int j=0 ; j<2 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	  for (int i=0 ; i<nbr_coefs(0)-1 ; i++) {
 	    pos_cf.set(0) = i ;
@@ -66,6 +68,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vr (Val_domain& so, int cc,
 	for (int j=2 ; j<nbr_coefs(1)  ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	  for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -108,6 +112,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vr (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	 for (int i=1 ; i<nbr_coefs(0)-1 ; i++) {   
 	       pos_cf.set(0) = i ;
@@ -155,6 +161,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vr (Val_domain& so, int cc,
 	for (int j=0; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	  for (int i=1 ; i<nbr_coefs(0) ; i++) {    
 	    pos_cf.set(0) = i ;
@@ -213,6 +221,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vt (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	    for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -271,6 +281,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vt (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 2) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	  for (int i=1 ; i<nbr_coefs(0) ; i++) {    
 	    pos_cf.set(0) = i ;pos_gal_r = pos_cf ;
@@ -329,6 +341,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vt (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 3) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	  for (int i=1 ; i<nbr_coefs(0) ; i++) {    
 	    pos_cf.set(0) = i ;
@@ -370,6 +384,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vt (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	   for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -404,6 +420,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vt (Val_domain& so, int cc,
 	for (int j=1; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	 for (int i=1 ; i<nbr_coefs(0) ; i++) {
 	    pos_cf.set(0) = i ;
@@ -491,6 +509,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	   for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -550,6 +570,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 2) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	  for (int i=1 ; i<nbr_coefs(0) ; i++) {    
 	    pos_cf.set(0) = i ;pos_gal_r = pos_cf ;
@@ -608,6 +630,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 3) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	  for (int i=1 ; i<nbr_coefs(0) ; i++) {    
 	    pos_cf.set(0) = i ;
@@ -665,6 +689,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 4) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	   for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -723,6 +749,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j,5) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	   for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -766,6 +794,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_ODD) || (baser==LEG_ODD)) ;
 	   for (int i=1 ; i<nbr_coefs(0)-1 ; i++) { 
 	    pos_cf.set(0) = i ;
@@ -801,6 +831,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain_vp (Val_domain& so, int cc,
 	for (int j=1; j<nbr_coefs(1) ; j++) {
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  assert ((baser==CHEB_EVEN) || (baser==LEG_EVEN)) ;
 	    for (int i=1 ; i<nbr_coefs(0) ; i++) {
 	    pos_cf.set(0) = i ;
@@ -877,6 +909,8 @@ void Domain_nucleus::affecte_tau_one_coef_val_domain (Val_domain& so, int mlim, 
 			for (int j=0 ; j<nbr_coefs(1) ; j++) {	
 				int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 				pos_cf.set(1) = j ;
+				if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+					continue ;
 				// Loop on r :
 				for (int i=0 ; i<nbr_coefs(0) ; i++) {
 					pos_cf.set(0) = i ;

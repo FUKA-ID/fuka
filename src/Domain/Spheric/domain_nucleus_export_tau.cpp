@@ -53,6 +53,8 @@ void Domain_nucleus::export_tau_val_domain_vr (const Val_domain& so, int order, 
 	// Cas k = 0 
 	for (int j=0 ; j<nbr_coefs(1) ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (0) ;
 	  assert (baset==COS_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
@@ -103,6 +105,8 @@ void Domain_nucleus::export_tau_val_domain_vr (const Val_domain& so, int order, 
     if (mquant%2==0) {
        for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (k) ;
 	  assert (baset==COS_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
@@ -148,6 +152,8 @@ void Domain_nucleus::export_tau_val_domain_vr (const Val_domain& so, int order, 
     if (mquant%2==1) {
        for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (k) ;
 	  assert (baset==SIN_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
@@ -209,6 +215,8 @@ void Domain_nucleus::export_tau_val_domain_vt (const Val_domain& so, int order, 
 	// Cas k = 0 
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (0) ;
 	  assert (baset==SIN_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
@@ -258,6 +266,8 @@ void Domain_nucleus::export_tau_val_domain_vt (const Val_domain& so, int order, 
   if (nbr_coefs(2)-1>2)
   for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (2) ;
 	  assert (baset==COS_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 2) ;
@@ -305,6 +315,8 @@ void Domain_nucleus::export_tau_val_domain_vt (const Val_domain& so, int order, 
   if (nbr_coefs(2)-1>3)
   for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (3) ;
 	  assert (baset==COS_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 3) ;
@@ -341,6 +353,8 @@ void Domain_nucleus::export_tau_val_domain_vt (const Val_domain& so, int order, 
     if (mquant%2==0) {
        for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (k) ;
 	  assert (baset==SIN_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
@@ -374,6 +388,8 @@ void Domain_nucleus::export_tau_val_domain_vt (const Val_domain& so, int order, 
     if (mquant%2==1) {
        for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (k) ;
 	  assert (baset==COS_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
@@ -448,6 +464,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
       // Cas k = 0 
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (0) ;
 	  assert (baset==SIN_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
@@ -509,6 +527,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
   if (nbr_coefs(2)-1>2)
   for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (2) ;
 	  assert (baset==COS_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 2) ;
@@ -556,6 +576,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
   if (nbr_coefs(2)-1>3)
   for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (3) ;
 	  assert (baset==COS_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 3) ;
@@ -589,6 +611,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
    pos_cf.set(2) = 4 ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (0) ;
 	  assert (baset==SIN_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
@@ -635,6 +659,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
    pos_cf.set(2) = 5 ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (0) ;
 	  assert (baset==SIN_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, 0) ;
@@ -685,6 +711,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
     if (mquant%2==0) {
        for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (k) ;
 	  assert (baset==SIN_ODD) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
@@ -718,6 +746,8 @@ void Domain_nucleus::export_tau_val_domain_vp (const Val_domain& so, int order, 
     if (mquant%2==1) {
        for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	  pos_cf.set(1) = j ;
+	  if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	  	continue ;
 	  int baset = (*so.get_base().bases_1d[1]) (k) ;
 	  assert (baset==COS_EVEN) ;
 	  int baser = (*so.get_base().bases_1d[0]) (j, k) ;
@@ -805,6 +835,8 @@ void Domain_nucleus::export_tau_val_domain (const Val_domain& so, int mlim, int 
 			for (int j=0 ; j<nbr_coefs(1) ; j++) {	
 				int baser = (*so.get_base().bases_1d[0]) (j, k) ;
 				pos_cf.set(1) = j ;
+				if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+					continue ;
 				// Loop on r :
 				for (int i=0 ; i<nbr_coefs(0) ; i++) {
 					pos_cf.set(0) = i ;

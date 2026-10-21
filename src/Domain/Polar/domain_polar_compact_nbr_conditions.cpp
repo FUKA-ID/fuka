@@ -35,6 +35,8 @@ int Domain_polar_compact::nbr_conditions_val_domain (const Val_domain& so, int m
 		bool indic = true ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (0) ;	
+		if (is_null_theta_mode (baset, mquant, pos(1), nbr_coefs(1)))
+			indic = false ;
 	//	if ((pos(1)!=0) && (order==1) && (baset==COS_EVEN)) 
 		//    rlim = 2 ;
 		
