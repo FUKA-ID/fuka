@@ -1,5 +1,23 @@
 # Frankfurt University/Kadath Initial Data (FUKA) - Release Notes
 
+## v2.4.5
+### Bug Fixes
+* The top theta coefficient of axisymmetric (m = 0) `COS_EVEN` fields is no longer an
+  unknown or a condition of `System_of_eqs` ([#14](https://github.com/FUKA-ID/fuka/issues/14)).
+  Its theta derivative vanishes at every collocation point, so the mode is in the kernel of
+  the discrete Laplacian and was set by aliased source terms. This affected rotating and
+  high-spin ID.
+    * Applies to the spherical (`Domain_nucleus`, `Domain_shell`, `Domain_compact`), adapted,
+      polar and adapted polar domains, including the surface mapping of adapted domains.
+      Other upstream Kadath domain families are unchanged.
+    * Each `COS_EVEN` m = 0 field has one fewer theta mode per domain, so solutions differ
+      from v2.4.4 at the level of the removed coefficient (round-off for non-rotating
+      objects).
+    * The mode is removed from the variables at the start of every Newton step, so
+      solutions from earlier versions still load and resume.
+    * The point-based matching `System_of_eqs::add_eq_matching_non_std` does not account
+      for the removed mode on shells. FUKA does not use it.
+
 ## v2.4
 ### New Features
 * Metadata related to FUKA version, commit, and build date is now part of
