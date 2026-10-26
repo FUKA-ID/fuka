@@ -29,11 +29,11 @@ with ID that requires an EOS.
 1. Generate the initial config file by running `solve` for the first time
 2. Rerun (using parallelization) using this config file, e.g. `mpirun ./bin/Release/solve initial_ns.info`
 3. This will result in the generation of a pair of files containing the solution: 
-`NS_TOTAL_BC.togashi.1.4.0.0.09.<info/dat>`
+`NS_UNIFORM_ROT.togashi.1.4.0.0.09.<info/dat>`
 
 We can deconstruct the name to make it understandable:
 
-- `NS_TOTAL_BC.` denotes a converged NS solution after the TOTAL_BC stage.
+- `NS_UNIFORM_ROT.` denotes a converged NS solution after the TOTAL_BC stage.
         This is meant to distinguish the solution from other stages such as the NOROT_BC and boosted NS stage.
         This also distinguishes it from checkpoints that can be turned on which our saved to file during each iteration of the solver
 - `togashi` denotes the eosfile used in the ID construction
@@ -47,30 +47,33 @@ The default configuration for an isolated NS has a mass of 1.4M and non-spinning
 Aside from the diagnostics observed during the solver stage, we can use the reader
 to verify the ID.  This can be done by running:
 
-`./bin/Release/reader NS_TOTAL_BC.togashi.1.4.0.0.09.info`
+`./bin/Release/reader NS_UNIFORM_ROT.togashi.1.4.0.0.09.info`
 
 Which results in the following:
 
 ```
                    RES = [+9,+9,+8]
-            Coord R_IN = +3.03469
-               Coord R = [+6.33309, +6.33309]
-           Coord R_OUT = +12.13876
+            Coord R_IN = +3.17083
+               Coord R = [+6.33300, +6.33300]
+           Coord R_OUT = +12.68332
 
-               Areal R = +7.81046 [+11.53605km]
-         Baryonic Mass = +1.55255
+               Areal R = +7.81036 [+11.53590km]
+     Circumferential R = +7.81036 [+11.53590km]
+         Mass Shedding = +1.00000
+         Baryonic Mass = +1.55245
               ADM Mass = +1.40000 [+1.40000]
           ADM Momentum = +0.00000
                    Chi = +0.00000 [+0.00000]
                  Omega = +0.00000
-       Central Density = +1.37405e-03
-        Central log(h) = +2.31726e-01
-      Central Pressure = +2.34280e-04
-    Central dlog(h)/dx = +3.40893e-14
-Central Euler Constant = -2.22137e-01
-     Integrated log(h) = +186.08372
+       Central Density = +1.37465e-03
+        Central log(h) = +2.31925e-01
+      Central Pressure = +2.34623e-04
+    Central dlog(h)/dx = -2.24895e-12
+Central Euler Constant = -2.22177e-01
+     Integrated log(h) = +186.26320
+                  Beta = +0.00000
 
-                    Mk = +1.40096, Diff: +6.84955e-04
+                    Mk = +1.40118, Diff: +8.41507e-04
                     Px = +0.00000
                     Py = +0.00000
                     Pz = +0.00000
@@ -253,34 +256,37 @@ procedure is done to maximize the chance for convergence by solving for
 
 3. Once the desired `chi` and `madm` is achieved, the solution is interpolated onto a new numerical grid with the desired final resolution
 4. With the high resolution initial guess, the `TOTAL_BC` stage is reran to obtain the desired ID
-5. This results in the converged dataset of `NS_TOTAL_BC.togashi.2.3.0.6.0.0.11.info/dat`, 
+5. This results in the converged dataset of `NS_UNIFORM_ROT.togashi.2.3.0.6.0.0.11.info/dat`, 
 however, the other implicit solutions have been saved as well.
 
 
 We can of course verify that the ID matches our expectation using
 
-`./bin/Release/reader NS_TOTAL_BC.togashi.2.3.0.6.0.11.info`
+`./bin/Release/reader NS_UNIFORM_ROT.togashi.2.3.0.6.0.11.info`
 
 ```
                    RES = [+11,+11,+10]
-            Coord R_IN = +1.47139
-               Coord R = [+2.94504, +3.97120]
-           Coord R_OUT = +5.95079
+            Coord R_IN = +2.20235
+               Coord R = [+4.35690, +6.15498]
+           Coord R_OUT = +8.80942
 
-               Areal R = +6.25539 [+9.23921km]
-         Baryonic Mass = +2.65411
+               Areal R = +8.05283 [+11.89402km]
+     Circumferential R = +8.74685 [+12.91909km]
+         Mass Shedding = +0.37160
+         Baryonic Mass = +2.69495
               ADM Mass = +2.30000 [+2.30000]
           ADM Momentum = +3.17400
                    Chi = +0.60000 [+0.60000]
-                 Omega = +0.06396
-       Central Density = +4.56602e-03
-        Central log(h) = +1.46938e+00
-      Central Pressure = +1.02698e-02
-    Central dlog(h)/dx = +6.70501e-14
-Central Euler Constant = -7.39008e-01
-     Integrated log(h) = +583.85557
+                 Omega = +0.04272
+       Central Density = +1.93879e-03
+        Central log(h) = +4.41969e-01
+      Central Pressure = +7.28288e-04
+    Central dlog(h)/dx = +1.78113e-14
+Central Euler Constant = -4.83936e-01
+     Integrated log(h) = +405.77474
+                  Beta = +0.08859
 
-                    Mk = +2.29825, Diff: +7.63310e-04
+                    Mk = +2.30040, Diff: +1.74422e-04
                     Px = +0.00000
                     Py = +0.00000
                     Pz = +0.00000

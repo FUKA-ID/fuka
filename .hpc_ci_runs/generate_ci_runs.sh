@@ -43,7 +43,7 @@ generate_bh_ci_runs() {
         "initial_bh.info" \
         "bh_first_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -63,7 +63,7 @@ generate_bh_ci_runs() {
         "initial_bh.info" \
         "bh_second_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 }
 
@@ -79,7 +79,7 @@ generate_ns_ci_runs() {
         "initial_ns.info" \
         "ns_first_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -99,7 +99,7 @@ generate_ns_ci_runs() {
         "initial_ns.info" \
         "ns_second_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 }
 
@@ -115,7 +115,7 @@ generate_bbh_ci_runs() {
         "initial_bbh.info" \
         "bbh_first_run" \
         "400" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -156,7 +156,7 @@ generate_bns_ci_runs() {
         "initial_bns.info" \
         "bns_first_run" \
         "400" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -198,7 +198,7 @@ generate_bhns_ci_runs() {
         "initial_bhns.info" \
         "bhns_first_run" \
         "400" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -214,9 +214,9 @@ generate_bhns_ci_runs() {
     update_bin_param "madm" "1.18" "ns1" "initial_bhns.info"
     update_bin_param "res" "11" "ns1" "initial_bhns.info"
 
-    update_bin_param "chi" "0.52" "ns2" "initial_bhns.info"
-    update_bin_param "mch" "2.42" "ns2" "initial_bhns.info"
-    update_bin_param "res" "9" "ns2" "initial_bhns.info"
+    update_bin_param "chi" "0.52" "bh2" "initial_bhns.info"
+    update_bin_param "mch" "2.42" "bh2" "initial_bhns.info"
+    update_bin_param "res" "9" "bh2" "initial_bhns.info"
 
     generate_submission \
         `pwd` \
@@ -241,7 +241,7 @@ generate_ns_diffrot_ci_runs() {
         "initial_ns.info" \
         "ns_diffrot_first_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -264,7 +264,7 @@ generate_ns_diffrot_ci_runs() {
         "initial_ns.info" \
         "ns_diffrot_second_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 
     cd ..
@@ -292,7 +292,7 @@ generate_ns_diffrot_ci_runs() {
         "initial_ns.info" \
         "ns_diffrot_third_run" \
         "200" \
-        "24:00:00" \
+        "5:00:00" \
         "$1"
 }
 

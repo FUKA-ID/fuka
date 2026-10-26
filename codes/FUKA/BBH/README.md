@@ -69,11 +69,11 @@ Which results in the following:
            Coord R_OUT = +1.95318
                Areal R = +1.00000
                  LAPSE = [+0.39317, +0.42512]
-                   PSI = [+1.56552, +1.57133]
+                   PSI = [+1.56552, +1.57132]
                   Mirr = +0.50000[+0.50000]
                    Mch = +0.50000[+0.50000]
                    Chi = -0.00000[+0.00000]
-                     S = -1.66046e-15
+                     S = -1.69836e-15
                  Omega = +2.54341e-02
 ###################### BH_PLUS ######################
             Center_COM = (+5.00000, 0, 0)
@@ -82,19 +82,19 @@ Which results in the following:
                      Q = +1.00000
             Separation = +10.00 [+10.00] (+14.77km)
          Orbital Omega = +2.79950e-02
-            Komar mass = +9.76165e-01
-              Adm mass = +9.91272e-01, Diff: +1.53565e-02
+            Komar mass = +9.76088e-01
+              Adm mass = +9.91258e-01, Diff: +1.54222e-02
             Total Mirr = +1.00000
              Total Mch = +1.00000
-           Adm moment. = +9.61464e-01
-        Binding energy = -8.72808e-03
+           Adm moment. = +9.61453e-01
+        Binding energy = -8.74169e-03
                M * Ome = +2.79950e-02
-              E_b / mu = -3.49123e-02
-                    Px = -2.79898e-16
-                    Py = +1.62586e-16
+              E_b / mu = -3.49668e-02
+                    Px = +8.72099e-17
+                    Py = +5.50172e-16
                     Pz = +0.00000e+00
-                  COMx = +1.23895e-13, A-COMx = +1.52244e-11
-                  COMy = +2.90536e-15, A-COMy = -4.28121e-12
+                  COMx = -2.58133e-13, A-COMx = +3.47082e-11
+                  COMy = -2.48323e-14, A-COMy = -1.02127e-11
                 A-COMz = +0.00000e+00
 ```
 
@@ -267,51 +267,51 @@ We can of course verify that the ID matches our expectation using
 
 ```
 ###################### BH_MINUS ######################
-            Center_COM = (-9.03308, 0, 0)
-            Coord R_IN = +0.03655
+            Center_COM = (-9.03317, 0, 0)
+            Coord R_IN = +0.04067
                Coord R = +0.06982
-                SHELL1 = +0.25084
-                SHELL2 = +0.69164
-           Coord R_OUT = +1.98044
+                SHELL1 = +0.27887
+                SHELL2 = +0.73515
+           Coord R_OUT = +1.98304
                Areal R = +0.19319
-                 LAPSE = [+0.32662, +0.37621]
-                   PSI = [+1.64811, +1.68740]
+                 LAPSE = [+0.32667, +0.37627]
+                   PSI = [+1.64810, +1.68739]
                   Mirr = +0.09659[+0.09659]
                    Mch = +0.10000[+0.10000]
                    Chi = -0.50000[-0.50000]
                      S = -5.00000e-03
-                 Omega = +1.22845e+00
+                 Omega = +1.22864e+00
 ###################### BH_PLUS ######################
-            Center_COM = (+0.96692, 0, 0)
-            Coord R_IN = +0.28503
+            Center_COM = (+0.96683, 0, 0)
+            Coord R_IN = +0.28755
                Coord R = +0.47064
-           Coord R_OUT = +1.98044
+           Coord R_OUT = +1.98304
                Areal R = +1.57270
                  LAPSE = [+0.27136, +0.31494]
-                   PSI = [+1.77691, +1.86173]
+                   PSI = [+1.77691, +1.86172]
                   Mirr = +0.78635[+0.78635]
                    Mch = +0.90000[+0.90000]
                    Chi = +0.85000[+0.85000]
                      S = +6.88500e-01
-                 Omega = -3.14472e-01
+                 Omega = -3.14474e-01
 ###################### Binary ######################
                    RES = [+11,+11,+10]
                      Q = +0.11111
             Separation = +10.00 [+10.00] (+14.77km)
-         Orbital Omega = +2.76356e-02
-            Komar mass = +1.00272e+00
-              Adm mass = +1.00223e+00, Diff: +4.89197e-04
+         Orbital Omega = +2.76358e-02
+            Komar mass = +1.00267e+00
+              Adm mass = +1.00221e+00, Diff: +4.58916e-04
             Total Mirr = +0.88294
              Total Mch = +1.00000
-           Adm moment. = +1.01677e+00
-        Binding energy = +2.23086e-03
-               M * Ome = +2.76356e-02
-              E_b / mu = +2.47874e-02
-                    Px = +5.66564e-15
-                    Py = -7.33888e-16
+           Adm moment. = +1.01672e+00
+        Binding energy = +2.21438e-03
+               M * Ome = +2.76358e-02
+              E_b / mu = +2.46042e-02
+                    Px = -4.12308e-15
+                    Py = -9.57319e-16
                     Pz = +0.00000e+00
-                  COMx = -4.03308e+00, A-COMx = -4.01442e+00
-                  COMy = +8.15763e-03, A-COMy = -9.11085e-03
+                  COMx = -4.03317e+00, A-COMx = -4.01450e+00
+                  COMy = +8.16151e-03, A-COMy = -9.11036e-03
                 A-COMz = +0.00000e+00
 ```
 
