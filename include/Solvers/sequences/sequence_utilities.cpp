@@ -313,14 +313,17 @@ void verify_resolution_sequence(config_t& bconfig, Res_t& resolution) {
     auto init_res = (std::isnan(bconfig.seq_setting(SEQ_SETTINGS::INIT_RES)))
                         ? 9
                         : bconfig.seq_setting(SEQ_SETTINGS::INIT_RES);
-    init_res = std::max(init_res, bconfig(resolution.get_indices()));
     // Determine highest resolution
     auto final_res = (resolution.is_default_set()) ? resolution.default_val()
                                                    : init_res;
     if (final_res < init_res)
         std::swap(init_res, final_res);
 
-    resolution.set(final_res, init_res, final_res);
+    if (!bconfig.control(CONTROLS::SEQUENCES)) {
+        resolution.set(final_res, final_res, final_res);
+    } else {
+        resolution.set(final_res, init_res, final_res);
+    }
 }
 
 template <class config_t, class seq_t>
