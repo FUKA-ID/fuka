@@ -373,9 +373,11 @@ void System_of_eqs::vars_to_terms () {
 			give_term_double(vv, dd)->set_val_d (*var_double[vv]) ;
 
 	for (int vv=0 ; vv<nvar ; vv++)
-		for (int dd=dom_min ; dd<=dom_max ; dd++)
+		for (int dd=dom_min ; dd<=dom_max ; dd++) {
+			espace.get_domain(dd)->zero_null_theta_mode (*var[vv], dd) ;
 			give_term(vv, dd)->set_val_t (*var[vv]) ;
-	
+		}
+
 }
 
 // Add an uknown

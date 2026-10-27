@@ -209,6 +209,7 @@ class Domain_shell_inner_adapted : public Domain {
      virtual Val_domain der_normal (const Val_domain&, int) const ;
 
      virtual int nbr_unknowns (const Tensor&, int) const ;
+     virtual void zero_null_theta_mode (Tensor&, int) const ;
 	/**
 	* Computes the number of true unknowns of a \c Val_domain.
 	* It takes into account the various symmetries and regularity conditions to determine the precise number of degrees of freedom.
@@ -525,6 +526,7 @@ class Domain_shell_outer_adapted : public Domain {
      virtual Val_domain der_normal (const Val_domain&, int) const ;
 
      virtual int nbr_unknowns (const Tensor&, int) const ;
+     virtual void zero_null_theta_mode (Tensor&, int) const ;
 	/**
 	* Computes the number of true unknowns of a \c Val_domain.
 	* It takes into account the various symmetries and regularity conditions to determine the precise number of degrees of freedom.

@@ -36,6 +36,8 @@ int Domain_nucleus::nbr_conditions_val_domain_boundary_vr (const Val_domain& so)
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (k) ;
+		if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case COS_EVEN:
 						if ((j==0) && (k!=0))
@@ -70,6 +72,8 @@ int Domain_nucleus::nbr_conditions_val_domain_boundary_vt (const Val_domain& so)
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (k) ;
+		if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case SIN_EVEN:
 						if ((j==nbr_coefs(1)-1) || (j==0))
@@ -106,6 +110,8 @@ int Domain_nucleus::nbr_conditions_val_domain_boundary_vp (const Val_domain& so)
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (k) ;
+		if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case COS_EVEN:
 					  if ((k>3) && (j==0))
@@ -139,6 +145,8 @@ int Domain_nucleus::nbr_conditions_val_domain_boundary (const Val_domain& so, in
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1])(k) ;
+		if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case COS_EVEN:
 						if ((j==0) && (k>=kmin))

@@ -39,6 +39,8 @@ void Domain_polar_shell_outer_adapted::export_tau_val_domain (const Val_domain& 
 	int baset = (*so.get_base().bases_1d[1]) (0) ;
 	for (int j=0 ; j<nbr_coefs(1) ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode (baset, mquant, j, nbr_coefs(1)))
+			continue ;
 		// Loop on r :
 		for (int i=0 ; i<nbr_coefs(0)-order ; i++) {
 			pos_cf.set(0) = i ;

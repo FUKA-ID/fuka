@@ -36,6 +36,8 @@ void Domain_polar_shell_outer_adapted::affecte_tau_val_domain (Val_domain& so, i
 	int baset = (*so.get_base().bases_1d[1]) (0) ;
 	for (int j=0 ; j<nbr_coefs(1) ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode (baset, mquant, j, nbr_coefs(1)))
+			continue ;
 		bool true_tet = true ;
 		switch (baset) {
 			case COS_EVEN:

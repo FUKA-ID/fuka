@@ -62,12 +62,12 @@ Which results in the following:
                    Mch = +0.50000[+0.50000]
                    Chi = -0.00000[+0.00000]
 
-                 Omega = -3.02175e-17
+                 Omega = -4.47077e-17
             Komar mass = +4.97314e-01
               Adm mass = +5.00087e-01, Diff: +5.56053e-03
-           Adm moment. = +3.14400e-14
-                    Px = +1.22876e-15
-                    Py = -2.36096e-16
+           Adm moment. = -1.42076e-15
+                    Px = +2.74146e-15
+                    Py = +6.58939e-15
                     Pz = +0.00000e+00
 ```
 
@@ -227,24 +227,24 @@ We can of course verify that the ID matches our expectation using
 
 ```
                    RES = [+11,+11,+10]
-            Coord R_IN = +0.32502
-               Coord R = +0.54163
-           Coord R_OUT = +2.60012
+            Coord R_IN = +0.41623
+               Coord R = +0.52812
+           Coord R_OUT = +3.32986
 
-               Areal R = +1.75647
-                 LAPSE = [+0.28547, +0.32448]
-                   PSI = [+1.75317, +1.82613]
+               Areal R = +1.74745
+                 LAPSE = [+0.27855, +0.31909]
+                   PSI = [+1.76822, +1.84611]
 
-                  Mirr = +0.87823[+0.87823]
+                  Mirr = +0.87372[+0.87372]
                    Mch = +1.00000[+1.00000]
-                   Chi = +0.84000[+0.84000]
+                   Chi = +0.85000[+0.85000]
 
-                 Omega = -3.03075e-01
-            Komar mass = +1.00517e+00
-              Adm mass = +1.00629e+00, Diff: +1.11392e-03
-           Adm moment. = +8.39740e-01
-                    Px = +4.19768e-15
-                    Py = -3.99361e-15
+                 Omega = -3.11500e-01
+            Komar mass = +1.00013e+00
+              Adm mass = +1.00802e+00, Diff: +7.85280e-03
+           Adm moment. = +8.50171e-01
+                    Px = -2.42573e-14
+                    Py = +2.09780e-14
                     Pz = +0.00000e+00
 ```
 

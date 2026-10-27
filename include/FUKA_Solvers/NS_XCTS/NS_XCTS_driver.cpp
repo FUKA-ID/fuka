@@ -85,13 +85,18 @@ struct launch_NS_XCTS_solver {
 
         std::array<bool, NUM_STAGES> const stage_enabled =
             bconfig.return_stages();
+        // Get last enabled to make for safety check later
+        auto [last_stage, last_stage_idx] =
+            get_last_enabled(MSTAGE, stage_enabled);
+
         if (stage_enabled[STAGES::NOROT_BC] && (exit_status != EXIT_FAILURE)) {
             NS_XCTS_NOROT<eos_t> norot_solver(&bconfig,
                                               seq,
                                               resolution,
                                               outputdir,
                                               rank);
-            launch(norot_solver);
+            bool check = last_stage_idx != STAGES::NOROT_BC;
+            launch(norot_solver, check);
         }
 
         if (stage_enabled[STAGES::UNIFORM_ROT] &&
@@ -330,6 +335,7 @@ inline int NS_XCTS_driver(NS_XCTS_BASE::base_config_t& bconfig,
                           Parameter_sequence<BCO_PARAMS>& resolution,
                           std::string outputdir) {
     int exit_status = EXIT_SUCCESS;
+    std::cout << resolution << std::endl;
     auto resolution_indices = resolution.get_indices();
     bconfig.set(resolution_indices) = resolution.init();
 

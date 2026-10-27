@@ -63,22 +63,22 @@ Which results in the following:
 ###################### NS_MINUS ######################
             Center_COM = (-15.10000, 0, 0)
             Coord R_IN = +3.16650
-               Coord R = [+5.95741,+6.12770] ([+8.79908,+9.05061] km)
+               Coord R = [+5.95742,+6.12771] ([+8.79910,+9.05063] km)
            Coord R_OUT = +9.25533
                Areal R = +7.79075 [+11.50693km]
-         Baryonic Mass = +1.55246 (+0.52511,+1.02735,)
+         Baryonic Mass = +1.55245 (+0.52510,+1.02735,)
      Isolated ADM Mass = +1.40000
-      Quasi-local Madm = +1.37747 Diff:+0.01609
+      Quasi-local Madm = +1.37746 Diff:+0.01610
          Quasi-local S = -0.00000
                    Chi = -0.00000 [+0.00000]
                  Omega = +0.00004
        x(max(Density)) = -15.10000 (-0.00000)
        Central Density = +1.37420e-03
-        Central log(h) = +2.31777e-01
-      Central Pressure = +2.34368e-04
-    Central dlog(h)/dx = -2.16809e-16
+        Central log(h) = +2.31775e-01
+      Central Pressure = +2.34365e-04
+    Central dlog(h)/dx = -1.47604e-15
 Central Euler Constant = -0.28321
-     Integrated log(h) = +186.21495
+     Integrated log(h) = +186.21313
 
 ###################### NS_PLUS ######################
             Center_COM = (+15.10000, 0, 0)
@@ -88,18 +88,18 @@ Central Euler Constant = -0.28321
                      Q = +1.00000
             Separation = +30.20 [+10.79] (+44.61km)
          Orbital Omega = +0.00901
-            Komar mass = +2.77630
-              Adm mass = +2.77333, Diff: +0.00054
+            Komar mass = +2.77629
+              Adm mass = +2.77332, Diff: +0.00054
      Total mass (Minf) = +2.80000
-           Adm moment. = +7.75720
-        Binding energy = -2.66666e-02
+           Adm moment. = +7.75714
+        Binding energy = -2.66830e-02
             Minf * Ome = +2.52151e-02
-            E_b / Minf = -9.52380e-03
-               ADM P_x = -1.76726e-14
-               ADM P_y = +2.08646e-14
+            E_b / Minf = -9.52965e-03
+               ADM P_x = +1.66693e-15
+               ADM P_y = -3.49828e-14
                ADM P_z = +0.00000e+00
-                  COMx = -0.00000, A-COMx = -0.00000
-                  COMy = +0.00000, A-COMy = +0.00000
+                  COMx = -0.00000, A-COMx = +0.00000
+                  COMy = -0.00000, A-COMy = -0.00000
                 A-COMz = +0.00000
 ```
 
@@ -296,44 +296,44 @@ We can of course verify that the ID matches our expectation using
 
 ```
 ###################### NS_MINUS ######################
-            Center_COM = (-20.30785, 0, 0)
+            Center_COM = (-20.30783, 0, 0)
             Coord R_IN = +2.92677
-               Coord R = [+5.86277,+6.23055] ([+8.65930,+9.20253] km)
-           Coord R_OUT = +9.18134
+               Coord R = [+5.86277,+6.23056] ([+8.65931,+9.20253] km)
+           Coord R_OUT = +9.18135
                Areal R = +7.74374 [+11.43749km]
          Baryonic Mass = +1.28557 (+0.35930,+0.92627,)
      Isolated ADM Mass = +1.18000
       Quasi-local Madm = +1.15484 Diff:+0.02132
-         Quasi-local S = -0.00000
-                   Chi = -0.00000 [+0.00000]
+         Quasi-local S = +0.00000
+                   Chi = +0.00000 [+0.00000]
                  Omega = +0.00009
        x(max(Density)) = -15.10000 (-0.00000)
        Central Density = +1.21999e-03
         Central log(h) = +1.83561e-01
       Central Pressure = +1.57389e-04
-    Central dlog(h)/dx = +1.50107e-15
+    Central dlog(h)/dx = -3.15240e-15
 Central Euler Constant = -0.29321
-     Integrated log(h) = +141.79256
+     Integrated log(h) = +141.79257
 
 ###################### NS_PLUS ######################
-            Center_COM = (+9.89215, 0, 0)
-            Coord R_IN = +1.84529
-               Coord R = [+3.74352,+4.72737] ([+5.52918,+6.98233] km)
-           Coord R_OUT = +9.18134
-               Areal R = +7.26845 [+10.73550km]
-         Baryonic Mass = +2.90866 (+0.76079,+2.14787,)
+            Center_COM = (+9.89217, 0, 0)
+            Coord R_IN = +1.84540
+               Coord R = [+3.74359,+4.72747] ([+5.52927,+6.98247] km)
+           Coord R_OUT = +9.18135
+               Areal R = +7.26853 [+10.73561km]
+         Baryonic Mass = +2.90865 (+0.76084,+2.14781,)
      Isolated ADM Mass = +2.42000
       Quasi-local Madm = +2.34788 Diff:+0.02980
          Quasi-local S = +3.04533
                    Chi = +0.52000 [+0.52000]
                  Omega = +0.05322
        x(max(Density)) = +15.10000 (+0.00000)
-       Central Density = +2.61945e-03
-        Central log(h) = +7.26408e-01
-      Central Pressure = +1.90375e-03
-    Central dlog(h)/dx = -2.43117e-15
-Central Euler Constant = -0.63951
-     Integrated log(h) = +528.05798
+       Central Density = +2.61935e-03
+        Central log(h) = +7.26368e-01
+      Central Pressure = +1.90354e-03
+    Central dlog(h)/dx = +2.69895e-16
+Central Euler Constant = -0.63950
+     Integrated log(h) = +528.04576
 
 ###################### Binary ######################
                    RES = [+11,+11,+10]
@@ -343,14 +343,14 @@ Central Euler Constant = -0.63951
             Komar mass = +3.56185
               Adm mass = +3.56308, Diff: +0.00017
      Total mass (Minf) = +3.60000
-           Adm moment. = +13.27756
-        Binding energy = -3.69181e-02
+           Adm moment. = +13.27755
+        Binding energy = -3.69245e-02
             Minf * Ome = +3.55439e-02
-            E_b / Minf = -1.02550e-02
-               ADM P_x = -1.17145e-14
-               ADM P_y = +2.77465e-14
+            E_b / Minf = -1.02568e-02
+               ADM P_x = +1.42836e-14
+               ADM P_y = +9.95651e-14
                ADM P_z = +0.00000e+00
-                  COMx = -5.20785, A-COMx = +5.21460
+                  COMx = -5.20783, A-COMx = +5.21458
                   COMy = +0.05642, A-COMy = +0.00036
                 A-COMz = +0.00000
 ```

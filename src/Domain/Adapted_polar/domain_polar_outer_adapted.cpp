@@ -171,7 +171,8 @@ void Domain_polar_shell_outer_adapted::del_deriv() const {
 
 
 int Domain_polar_shell_outer_adapted::nbr_unknowns_from_adapted() const {
-  return nbr_coefs(1) ;
+  int baset = (*outer_radius->get_base().get_base_1d(1)) (0) ;
+  return (is_null_theta_mode (baset, 0, nbr_coefs(1)-1, nbr_coefs(1))) ? nbr_coefs(1)-1 : nbr_coefs(1) ;
 }
 
 void Domain_polar_shell_outer_adapted::vars_to_terms() const {
@@ -196,7 +197,10 @@ void Domain_polar_shell_outer_adapted::affecte_coef(int& conte, int cc, bool& fo
     found = false ;
     
     
+	 int baset = (*outer_radius->get_base().get_base_1d(1)) (0) ;
 	 for (int j=0 ; j<nbr_coefs(1) ; j++) {
+	     if (is_null_theta_mode (baset, 0, j, nbr_coefs(1)))
+	         continue ;
 	      if (conte==cc) {
 		  Index pos_cf (nbr_coefs) ;
 		  pos_cf.set(0) = 0 ;
@@ -226,13 +230,22 @@ void Domain_polar_shell_outer_adapted::xx_to_vars_from_adapted(Val_domain& new_o
     Index pos_cf (nbr_coefs) ;	    
     pos_cf.set(0) = 0 ;
     
+	  int baset = (*outer_radius->get_base().get_base_1d(1)) (0) ;
 	  for (int j=0 ; j<nbr_coefs(1) ; j++) {
+	      if (is_null_theta_mode (baset, 0, j, nbr_coefs(1)))
+	          continue ;
 	    pos_cf.set(1)=  j ;
 	    new_outer_radius.cf->set(pos_cf) -= xx(pos) ; 
 	    pos ++ ;
 	  }
       
-      new_outer_radius.set_base() = outer_radius->get_base() ;  
+      new_outer_radius.set_base() = outer_radius->get_base() ;
+      // The top coefficient is not an unknown: remove the value it may have in the initial mapping.
+      if (is_null_theta_mode (baset, 0, nbr_coefs(1)-1, nbr_coefs(1))) {
+          outer_radius->coef() ;
+          pos_cf.set(1) = nbr_coefs(1)-1 ;
+          new_outer_radius.cf->set(pos_cf) = -outer_radius->get_coef(pos_cf) ;
+      }
 }
 
 void Domain_polar_shell_outer_adapted::update_mapping (const Val_domain& cor) {
@@ -300,7 +313,10 @@ void Domain_polar_shell_outer_adapted::xx_to_ders_from_adapted(const Array<doubl
     Index pos_cf (nbr_coefs) ;	    
     pos_cf.set(0) = 0 ;
    
+	  int baset = (*outer_radius->get_base().get_base_1d(1)) (0) ;
 	  for (int j=0 ; j<nbr_coefs(1) ; j++) {
+	      if (is_null_theta_mode (baset, 0, j, nbr_coefs(1)))
+	          continue ;
 	    pos_cf.set(1)=  j ;
 	    auxi.cf->set(pos_cf) = xx(pos) ;
 	    pos ++ ;

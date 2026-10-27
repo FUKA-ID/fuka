@@ -33,6 +33,8 @@ int Domain_polar_nucleus::nbr_conditions_val_domain (const Val_domain& so, int m
 		bool indic = true ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (0) ;
+		if (is_null_theta_mode (baset, mquant, pos(1), nbr_coefs(1)))
+			indic = false ;
 		int lquant ;
 		switch (baset) {
 					case COS_EVEN:

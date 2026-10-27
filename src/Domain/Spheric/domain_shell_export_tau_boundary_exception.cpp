@@ -55,6 +55,8 @@ void Domain_shell::export_tau_val_domain_boundary_exception (const Val_domain& s
 			int baset = (*so.get_base().bases_1d[1]) (k) ;
 			for (int j=0 ; j<nbr_coefs(1) ; j++) {
 				pos_cf.set(1) = j ;
+				if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+					continue ;
 				switch (baset) {
 					case COS_EVEN:
 						if (k<kmin) {

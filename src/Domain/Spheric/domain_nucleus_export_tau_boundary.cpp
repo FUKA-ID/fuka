@@ -40,6 +40,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vr (const Val_domain& so, in
 	assert (baset==COS_EVEN) ;
 	for (int j=0 ; j<nbr_coefs(1) ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -53,6 +55,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vr (const Val_domain& so, in
 	assert (baset==SIN_ODD) ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -66,6 +70,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vr (const Val_domain& so, in
 	assert (baset==SIN_ODD) ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -82,6 +88,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vr (const Val_domain& so, in
 	    assert (baset==COS_EVEN) ;
 	    for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	      	pos_cf.set(1) = j ;
+	      	if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	      		continue ;
 		pos_galerkin = pos_cf ;
 		pos_galerkin.set(1) = 0 ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) -2.*val_boundary(bound, so, pos_galerkin) ;
@@ -93,6 +101,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vr (const Val_domain& so, in
 	    assert (baset==SIN_ODD) ;
 	    for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 	      	pos_cf.set(1) = j ;
+	      	if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	      		continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf)  ;
 		pos_sec ++ ;
 	  }
@@ -118,6 +128,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vt (const Val_domain& so, in
 	assert (baset==SIN_EVEN) ;
 	for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ; 
 		pos_sec ++ ;
 	}
@@ -131,6 +143,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vt (const Val_domain& so, in
 	assert (baset==COS_ODD) ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -144,6 +158,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vt (const Val_domain& so, in
 	assert (baset==COS_ODD) ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -160,6 +176,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vt (const Val_domain& so, in
 	    assert (baset==SIN_EVEN) ;
 	    for (int j= 1 ; j<nbr_coefs(1)-1 ; j++) {
 	      	pos_cf.set(1) = j ;
+	      	if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	      		continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf)  ;
 		pos_sec ++ ;
 	  }
@@ -169,6 +187,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vt (const Val_domain& so, in
 	    assert (baset==COS_ODD) ;
 	      for (int j=1 ; j<nbr_coefs(1)-1 ; j++) {
 	      	pos_cf.set(1) = j ;
+	      	if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	      		continue ;
 		pos_galerkin = pos_cf ;
 		pos_galerkin.set(1) = 0 ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) -val_boundary(bound, so, pos_galerkin) ;
@@ -198,6 +218,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vp (const Val_domain& so, in
 	assert (baset==SIN_ODD) ;
 	for (int j=0 ; j<nbr_coefs(1)-1 ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -211,6 +233,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vp (const Val_domain& so, in
 	assert (baset==COS_EVEN) ;
 	for (int j=0 ; j<nbr_coefs(1) ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -224,6 +248,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vp (const Val_domain& so, in
 	assert (baset==COS_EVEN) ;
 	for (int j=0 ; j<nbr_coefs(1) ; j++) {
 		pos_cf.set(1) = j ;
+		if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+			continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) ;
 		pos_sec ++ ;
 	}
@@ -240,6 +266,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vp (const Val_domain& so, in
 	    assert (baset==SIN_ODD) ;
 	    for (int j= 0 ; j<nbr_coefs(1)-1 ; j++) {
 	      	pos_cf.set(1) = j ;
+	      	if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	      		continue ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf)  ;
 		pos_sec ++ ;
 	  }
@@ -249,6 +277,8 @@ void Domain_nucleus::export_tau_val_domain_boundary_vp (const Val_domain& so, in
 	    assert (baset==COS_EVEN) ;
 	   for (int j=1 ; j<nbr_coefs(1) ; j++) {
 	      	pos_cf.set(1) = j ;
+	      	if (is_null_theta_mode ((*so.get_base().bases_1d[1]) (pos_cf(2)), pos_cf(2)/2, j, nbr_coefs(1)))
+	      		continue ;
 		pos_galerkin = pos_cf ;
 		pos_galerkin.set(1) = 0 ;
 		sec.set(pos_sec) = val_boundary(bound, so, pos_cf) -2.*val_boundary(bound, so, pos_galerkin) ;
@@ -277,6 +307,8 @@ void Domain_nucleus::export_tau_val_domain_boundary (const Val_domain& so, int m
 			int baset = (*so.get_base().bases_1d[1]) (k) ;
 			for (int j=0 ; j<nbr_coefs(1) ; j++) {
 				pos_cf.set(1) = j ;
+				if (is_null_theta_mode (baset, k/2, j, nbr_coefs(1)))
+					continue ;
 				switch (baset) {
 					case COS_EVEN:
 						if (k<kmin) {

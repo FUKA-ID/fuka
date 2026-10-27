@@ -38,6 +38,8 @@ int Domain_shell_outer_adapted::nbr_unknowns_val_domain (const Val_domain& so, i
 			indic = false ;
 		// Get base in theta :
 		int baset = (*so.get_base().bases_1d[1]) (pos(2)) ;
+		if (is_null_theta_mode (baset, pos(2)/2, pos(1), nbr_coefs(1)))
+			indic = false ;
 		switch (baset) {
 					case COS_EVEN:
 						if ((pos(1)==0) && (pos(2)>=kmin))

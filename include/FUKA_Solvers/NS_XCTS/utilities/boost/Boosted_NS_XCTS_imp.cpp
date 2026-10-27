@@ -19,6 +19,7 @@ Boosted_NS_XCTS<eos_t>::Boosted_NS_XCTS(
                  << (*binary_config)(BIN_PARAMS::GOMEGA);
         this->stagename = stage_ss.str();
     }
+    reload();
 }
 
 template <class eos_t>
@@ -54,8 +55,12 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
                   << "Fixing parameters:\n"
                   << "Madm: " << (*bconfig)(BCO_PARAMS::MADM) << std::endl
                   << "Mb: " << (*bconfig)(BCO_PARAMS::MB) << std::endl
-                  << "Chi: " << (*bconfig)(BCO_PARAMS::CHI) << std::endl
-                  << "############################" << std::endl;
+                  << "Chi: " << (*bconfig)(BCO_PARAMS::CHI) << std::endl;
+        if (binary_config) {
+            std::cout << "GOMEGA: " << (*binary_config)(BIN_PARAMS::GOMEGA)
+                      << std::endl;
+        }
+        std::cout << "############################" << std::endl;
     }
     // We use `config_filename()` vs `config_filename_abs()` since
     // `solution_exists` will probe the HOME_KADATH/COs directory
@@ -75,7 +80,7 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
     update_fields_co(*cfields, *coord_vectors, {}, 0.);
     syst.reset(new System_of_eqs(*space));
 
-    syst->add_var("phi", *phi);
+    syst->add_var("phi", *(this->phi));
 
     syst->add_cst("Hconst", *(this->logh));
     syst->add_var("Hscale", H_scale);
@@ -195,17 +200,18 @@ void Boosted_NS_XCTS<eos_t>::load_solution_from_file() {
     FILE* ff1 = fopen(spacein.c_str(), "r");
 
     this->space.reset(new base_space_t{ff1});
-    this->conformal_factor.reset(new Scalar(*space, ff1));
-    this->lapse.reset(new Scalar(*space, ff1));
-    this->shift.reset(new Vector(*space, ff1));
-    this->logh.reset(new Scalar(*space, ff1));
+    this->conformal_factor.reset(new Scalar(*this->space, ff1));
+    this->lapse.reset(new Scalar(*this->space, ff1));
+    this->shift.reset(new Vector(*this->space, ff1));
+    this->logh.reset(new Scalar(*this->space, ff1));
 
     if (bconfig->field(Kadath::FUKA_Config::BCO_FIELDS::PHI)) {
-        phi.reset(new Scalar(*space.get(), ff1));
+        phi.reset(new Scalar(*this->space, ff1));
     } else if (binary_config) {
-        phi.reset(new Kadath::Scalar(*space));
+        phi.reset(new Kadath::Scalar(*this->space));
         phi->annule_hard();
         phi->std_base();
+        phi->coef();
     }
     fclose(ff1);
 

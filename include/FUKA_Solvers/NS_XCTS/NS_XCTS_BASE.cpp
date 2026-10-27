@@ -275,6 +275,9 @@ void NS_XCTS_BASE::load_solution_from_file() {
     lapse.reset(new Scalar(*space, ff1));
     shift.reset(new Vector(*space, ff1));
     logh.reset(new Scalar(*space, ff1));
+    lapse->coef();
+    shift->coef();
+    logh->coef();
 
     if (bconfig->field(Kadath::FUKA_Config::BCO_FIELDS::DIFF_OMEGA)) {
         diff_omega.reset(new Scalar(*space.get(), ff1));

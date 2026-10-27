@@ -186,6 +186,8 @@ int Domain_shell_outer_adapted::nbr_unknowns_from_adapted() const {
       if ((k!=1) && (k!=nbr_coefs(2)-1)) {
 	  int mm = (k%2==0) ? int(k/2) : int ((k-1)/2) ;
 	  int jmax = (mm%2==0) ? nbr_coefs(1) : nbr_coefs(1)-1 ;
+	  if (is_null_theta_mode ((*outer_radius->get_base().get_base_1d(1)) (k), mm, jmax-1, nbr_coefs(1)))
+	    jmax -- ;
 	  int jmin =  (k>=4) ? 1 : 0 ;
 	  for (int j=jmin ; j<jmax ; j++)
 	    res ++ ;
@@ -218,6 +220,8 @@ void Domain_shell_outer_adapted::affecte_coef(int& conte, int cc, bool& found) c
       if ((k!=1) && (k!=nbr_coefs(2)-1)) {
 	  int mm = (k%2==0) ? int(k/2) : int ((k-1)/2) ;
 	  int jmax = (mm%2==0) ? nbr_coefs(1) : nbr_coefs(1)-1 ;
+	  if (is_null_theta_mode ((*outer_radius->get_base().get_base_1d(1)) (k), mm, jmax-1, nbr_coefs(1)))
+	    jmax -- ;
 	  int jmin = (k>=4) ? 1 : 0 ;
 	  for (int j=jmin ; j<jmax ; j++) {
 	      if (conte==cc) {
@@ -266,6 +270,8 @@ void Domain_shell_outer_adapted::xx_to_vars_from_adapted(Val_domain& new_outer_r
 	  pos_cf.set(2) = k ;
 	  int mm = (k%2==0) ? int(k/2) : int ((k-1)/2) ;
 	  int jmax = (mm%2==0) ? nbr_coefs(1) : nbr_coefs(1)-1 ;
+	  if (is_null_theta_mode ((*outer_radius->get_base().get_base_1d(1)) (k), mm, jmax-1, nbr_coefs(1)))
+	    jmax -- ;
 	  int jmin = (k>=4) ? 1 : 0 ;
 	  for (int j=jmin ; j<jmax ; j++) {
 	    pos_cf.set(1)=  j ;
@@ -286,6 +292,15 @@ void Domain_shell_outer_adapted::xx_to_vars_from_adapted(Val_domain& new_outer_r
       }
 
       new_outer_radius.set_base() = outer_radius->get_base() ;
+      // The top coefficient of the axisymmetric part is not an unknown: remove the value it may have
+      // in the initial mapping.
+      int baset0 = (*outer_radius->get_base().get_base_1d(1)) (0) ;
+      if (is_null_theta_mode (baset0, 0, nbr_coefs(1)-1, nbr_coefs(1))) {
+          outer_radius->coef() ;
+          pos_cf.set(1) = nbr_coefs(1)-1 ;
+          pos_cf.set(2) = 0 ;
+          new_outer_radius.cf->set(pos_cf) = -outer_radius->get_coef(pos_cf) ;
+      }
 }
 
 void Domain_shell_outer_adapted::update_mapping (const Val_domain& cor) {
@@ -358,6 +373,8 @@ void Domain_shell_outer_adapted::xx_to_ders_from_adapted(const Array<double>& xx
 	  pos_cf.set(2) = k ;
 	  int mm = (k%2==0) ? int(k/2) : int ((k-1)/2) ;
 	  int jmax = (mm%2==0) ? nbr_coefs(1) : nbr_coefs(1)-1 ;
+	  if (is_null_theta_mode ((*outer_radius->get_base().get_base_1d(1)) (k), mm, jmax-1, nbr_coefs(1)))
+	    jmax -- ;
 	  int jmin = (k>=4) ? 1 : 0 ;
 	  for (int j=jmin ; j<jmax ; j++) {
 	    pos_cf.set(1)=  j ;
