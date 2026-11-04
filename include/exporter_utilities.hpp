@@ -548,90 +548,87 @@ void spherical_turduck_fit_origin__all_gfs(fields_ary_t& quants,
     }
 }
 
+/**
+   * export_utils::partial_fill_excision
+   *
+   * @brief Fill the excised domain dom_to_fill of a BH exporter: interior
+   * points from the exporter's pointwise interpolation of the solution, the
+   * outer boundary points from the inner boundary of src_dom (the same
+   * points). The values are collected first, with const reads only, and then
+   * written into a freshly allocated configuration space of dom_to_fill:
+   * the fields hold only coefficients after loading, and writing through
+   * Val_domain::set would drop them without allocating values (segfault)
+   *
+   * @tparam bh_exporter_t: BH exporter type (XCTS_VARS, get_* accessors)
+   * @param[inout] bh_exporter: exporter whose fields are filled
+   * @param[input] dom_to_fill: excised domain to fill
+   * @param[input] src_dom: domain whose inner boundary matches the outer
+   *                        boundary of dom_to_fill
+   */
 template <class bh_exporter_t>
 void partial_fill_excision(bh_exporter_t& bh_exporter,
                            const int dom_to_fill,
                            const int src_dom) {
     using namespace Kadath;
+    using xcts = typename bh_exporter_t::XCTS_VARS;
 
-    // We set this to false to ensure that
-    // bh_exporter.interpolate_pointwise will not fit to origin
+    // bh_exporter.interpolate_pointwise must not fit to the origin
     bh_exporter.set__export_ready(false);
 
     auto dom = bh_exporter.get_space()->get_domain(dom_to_fill);
-    auto npts = dom->get_nbr_points();
-
-    Index pos(npts);
-    Val_domain xx = dom->get_cart(1);
-    Val_domain yy = dom->get_cart(2);
-    Val_domain zz = dom->get_cart(3);
+    auto const npts = dom->get_nbr_points();
+    Val_domain const xx = dom->get_cart(1);
+    Val_domain const yy = dom->get_cart(2);
+    Val_domain const zz = dom->get_cart(3);
 
     auto& lapse = bh_exporter.get_lapse();
     auto& conf = bh_exporter.get_conformal_factor();
     auto& shift = bh_exporter.get_shift();
     auto& A = bh_exporter.get_A();
 
+    // filled fields and their slots in the exported quantities
+    std::vector<std::pair<Scalar*, std::size_t>> const targets{
+        {&*conf, xcts::XCTS_PSI},
+        {&*lapse, xcts::XCTS_ALPHA},
+        {&shift->set(1), xcts::XCTS_BETA1},
+        {&shift->set(2), xcts::XCTS_BETA2},
+        {&shift->set(3), xcts::XCTS_BETA3},
+        {&A->set(1, 1), xcts::XCTS_A11},
+        {&A->set(1, 2), xcts::XCTS_A12},
+        {&A->set(1, 3), xcts::XCTS_A13},
+        {&A->set(2, 2), xcts::XCTS_A22},
+        {&A->set(2, 3), xcts::XCTS_A23},
+        {&A->set(3, 3), xcts::XCTS_A33}};
+
+    std::vector<std::vector<double>> values(targets.size());
+    Index pos(npts);
     do {
         if (pos(0) < npts(0) - 1) {
-            double x = xx(pos);
-            double y = yy(pos);
-            double z = zz(pos);
-
-            // This function can, in principle, be used to interpolate
-            // a subset of the grid functions that normally exported. i.e.
-            // there is no reason to interpolate fluid quantities
-            // insidde the excision region.
-            bh_exporter.interpolate_pointwise__solution_gfs(x, y, z);
-            auto qv = bh_exporter.get__quant_vals();
-            conf->set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_PSI];
-            lapse->set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_ALPHA];
-
-            shift->set(1).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_BETA1];
-            shift->set(2).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_BETA2];
-            shift->set(3).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_BETA3];
-
-            A->set(1, 1).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_A11];
-            A->set(1, 2).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_A12];
-            A->set(1, 3).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_A13];
-            A->set(2, 2).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_A22];
-            A->set(2, 3).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_A23];
-            A->set(3, 3).set_domain(dom_to_fill).set(pos) =
-                qv[bh_exporter_t::XCTS_VARS::XCTS_A33];
+            bh_exporter.interpolate_pointwise__solution_gfs(xx(pos),
+                                                            yy(pos),
+                                                            zz(pos));
+            auto const qv = bh_exporter.get__quant_vals();
+            for (std::size_t t = 0; t < targets.size(); ++t)
+                values[t].push_back(qv[targets[t].second]);
         } else {
             Index bcpos(pos);
             bcpos.set(0) = 0;
-            conf->set_domain(dom_to_fill).set(pos) =
-                conf->set_domain(src_dom)(bcpos);
-            lapse->set_domain(dom_to_fill).set(pos) =
-                lapse->set_domain(src_dom)(bcpos);
-            for (int i = 1; i <= 3; ++i) {
-                shift->set(i).set_domain(dom_to_fill).set(pos) =
-                    shift->set(i).set_domain(src_dom)(bcpos);
+            for (std::size_t t = 0; t < targets.size(); ++t) {
+                Scalar const& field = *targets[t].first;
+                values[t].push_back(field(src_dom)(bcpos));
             }
-            A->set(1, 1).set_domain(dom_to_fill).set(pos) =
-                A->set(1, 1).set_domain(src_dom).set(bcpos);
-            A->set(1, 2).set_domain(dom_to_fill).set(pos) =
-                A->set(1, 2).set_domain(src_dom).set(bcpos);
-            A->set(1, 3).set_domain(dom_to_fill).set(pos) =
-                A->set(1, 3).set_domain(src_dom).set(bcpos);
-            A->set(2, 2).set_domain(dom_to_fill).set(pos) =
-                A->set(2, 2).set_domain(src_dom).set(bcpos);
-            A->set(2, 3).set_domain(dom_to_fill).set(pos) =
-                A->set(2, 3).set_domain(src_dom).set(bcpos);
-            A->set(3, 3).set_domain(dom_to_fill).set(pos) =
-                A->set(3, 3).set_domain(src_dom).set(bcpos);
         }
     } while (pos.inc());
+
+    for (std::size_t t = 0; t < targets.size(); ++t) {
+        Val_domain& filled = targets[t].first->set_domain(dom_to_fill);
+        filled.allocate_conf();
+        Index point(npts);
+        std::size_t n = 0;
+        do {
+            filled.set(point) = values[t][n++];
+        } while (point.inc());
+    }
 
     conf->std_base();
     lapse->std_base();
