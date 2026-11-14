@@ -23,9 +23,20 @@
 #include "scalar.hpp"
 #include "metric.hpp"
 #include "array.hpp"
+#include "Linear_solvers/newton_linear_solve.hpp"
+#include "Linear_solvers/sparse_triplets.hpp"
+#ifdef KADATH_USE_MUMPS
+#include "Linear_solvers/mumps_solver.hpp"
+#endif
 
 #include <chrono>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
+#include <string>
+#include <vector>
 
 namespace Kadath {
 extern "C" {
@@ -62,65 +73,15 @@ void split_2d (int target, int& low, int& up) {
   low = target / up;
 }
 
-bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SOLVER solver) {
-	// rank and nproc from MPI :
+namespace linear_solvers {
+
+Array<double> newton_update_scalapack(System_of_eqs& syst, Array<double> const& second, System_of_eqs::SOLVER solver) {
 	int rank, nproc;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
 
-	vars_to_terms();
-	Array<double> second (sec_member());
-	Array<double> abs_errs(check_equations());
-  error = max(abs_errs);
-
-	if (rank==0) {
-    if(abs_errs.nbr != eq_list.size() + eq_int_list.size()) {
-      std::cout << "There is a mismatch between the number of eqs and the registered eq strings."
-                   "Please check the add_eq routines of your space." << std::endl;
-  		//abort();
-    }
-
-    double max = abs_errs.data[0];
-    int i_max = 0;
-
-  	for (int i=0; i<abs_errs.nbr; i++)
-  		if (abs_errs.data[i] > max) {
-  			max = abs_errs.data[i];
-  			i_max = i;
-  		}
-
-		std::cout << "Error init = " << error << ",";
-
-		if(i_max < neq_int && neq_int > 0) {
-      auto [ eq, dom, boundary ] = eq_int_list[i_max];
-      std::cout << " Eq: " << eq << " Dom: " << dom << " Bounday: " << boundary << std::endl;
-		}
-		else {
-      i_max -= neq_int;
-      auto [ eq, dom, boundary ] = eq_list[i_max];
-      std::cout << " Eq: " << eq << " Dom: " << dom << " Bounday: " << boundary << std::endl;
-		}
-	}
-
-	if (error < precision) {
-		return true;
-	}
-	else {
-
 	int m = second.get_size(0);
-  int n = nbr_unknowns;
-
-	if (solver == NEWTON_RAPHSON && n != m) {
-		cerr << "Number of unknowns is different from the number of equations" << endl;
-		cerr << "nbr equations = " << m << endl;
-		cerr << "nbr unknowns  = " << n << endl;
-		abort();
-	}
-
-	if (rank==0) {
-    double size = 1.0 * n * m;
-		std::cout << "DOF / rank = " << n << " x " << m << " / " << nproc <<  " = " << size / nproc << endl;
-	}
+	int n = syst.get_nbr_unknowns();
 
 	// Computation in a 1D distributed matrice
 	int zero_i = 0;
@@ -170,7 +131,7 @@ bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SO
   // actually compute the local cols of J
   std::vector<Array<double>> col_J;
   for(int j = 0; j < ncol_in; ++j) {
-    col_J.push_back(do_col_J(globcol_in[j]));
+    col_J.push_back(syst.do_col_J(globcol_in[j]));
   }
 
   // distributed storage for local columns of J
@@ -261,7 +222,7 @@ bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SO
   // local copy of the solution
     Array<double>& X_sol = B;
 
-    if(solver == GAUSS_NEWTON) {
+    if(solver == System_of_eqs::GAUSS_NEWTON) {
     // local rows of J^T B
   	int nrow_X = numroc_ (&n, &bsize, &prow, &zero_i, &nprow);
   	Array<double> JTB (nrow_X);
@@ -310,7 +271,7 @@ bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SO
     X_sol = JTB;
   }
 
-  if(solver == NEWTON_RAPHSON) {
+  if(solver == System_of_eqs::NEWTON_RAPHSON) {
   	// solve the linear system
     Array<int> ipiv (n);
 
@@ -392,6 +353,334 @@ bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SO
 
 	blacs_gridexit_ (&ictxt_in);
 	blacs_gridexit_ (&ictxt);
+
+	return X;
+}
+
+namespace {
+
+void report_rank_times(char const* label, double time) {
+	int rank, nproc;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
+
+	double maxtime, mintime, avgtime;
+	MPI_Reduce(&time, &maxtime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&time, &mintime, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&time, &avgtime, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+	if (rank == 0)
+		std::cout << label << ": " << avgtime / nproc << " / " << mintime << " / " << maxtime
+		          << " seconds (avg/min/max)" << std::endl;
+}
+
+/// Value of an environment variable on rank 0, broadcast so every rank takes the same branch.
+std::string env_on_root(char const* name, std::string const& fallback) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	std::string value = fallback;
+	if (rank == 0 && std::getenv(name) != nullptr)
+		value = std::getenv(name);
+
+	int len = static_cast<int>(value.size());
+	MPI_Bcast(&len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	value.resize(len);
+	if (len > 0)
+		MPI_Bcast(&value[0], len, MPI_CHAR, 0, MPI_COMM_WORLD);
+	return value;
+}
+
+#ifdef KADATH_USE_MUMPS
+/// KADATH_NEWTON_DUMP_PATTERN=<prefix>: write this rank's Jacobian entries of the first
+/// KADATH_NEWTON_DUMP_STEPS (default 3) MUMPS Newton steps with at least KADATH_NEWTON_DUMP_MIN_N (default 0)
+/// unknowns to <prefix>.step<k>.rank<r>.bin for offline analysis
+/// (layout: int32 n, int32 nproc, int64 count, int32 rows[count], int32 cols[count], double values[count];
+/// 1-based indices). Read-only diagnostic: the solve is unaffected.
+void dump_jacobian_pattern(int n, SparseTriplets const& local) {
+	static int step = 0;
+	std::string const prefix = env_on_root("KADATH_NEWTON_DUMP_PATTERN", "");
+	int const max_steps = std::stoi(env_on_root("KADATH_NEWTON_DUMP_STEPS", "3"));
+	int const min_n = std::stoi(env_on_root("KADATH_NEWTON_DUMP_MIN_N", "0"));
+	if (prefix.empty() || step >= max_steps || n < min_n)
+		return;
+
+	int rank, nproc;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
+	std::string const name = prefix + ".step" + std::to_string(step) + ".rank" + std::to_string(rank) + ".bin";
+	std::ofstream out (name, std::ios::binary);
+	std::int64_t const count = local.size();
+	out.write(reinterpret_cast<char const*>(&n), sizeof(n));
+	out.write(reinterpret_cast<char const*>(&nproc), sizeof(nproc));
+	out.write(reinterpret_cast<char const*>(&count), sizeof(count));
+	out.write(reinterpret_cast<char const*>(local.rows.data()), count * sizeof(int));
+	out.write(reinterpret_cast<char const*>(local.cols.data()), count * sizeof(int));
+	out.write(reinterpret_cast<char const*>(local.values.data()), count * sizeof(double));
+	if (!out)
+		std::cerr << "rank " << rank << ": could not write " << name << std::endl;
+	if (rank == 0)
+		std::cout << "Jacobian pattern of Newton step " << step << " written to " << prefix << ".step" << step
+		          << ".rank*.bin" << std::endl;
+	++step;
+}
+#endif
+
+}  // namespace
+
+#ifdef KADATH_USE_MUMPS
+Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& second, int* status_out) {
+	int rank, nproc;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
+
+	int const n = syst.get_nbr_unknowns();
+	auto begin = std::chrono::system_clock::now();
+
+	SparseTriplets local;
+	// Round-robin columns (block 1): unknowns are ordered domain by domain, so every rank gets the same share of
+	// every domain and the per-domain cost differences of do_col_J average out.
+	int const column_block = std::max(1, std::stoi(env_on_root("KADATH_MUMPS_COLUMN_BLOCK", "1")));
+	for (int col : block_cyclic_columns(n, column_block, rank, nproc))
+		append_column(syst.do_col_J(col), col, local);
+	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
+	dump_jacobian_pattern(n, local);
+
+	std::vector<double> x (second.get_data(), second.get_data() + n);
+	MumpsSolver mumps (MPI_COMM_WORLD);
+	int const status = mumps.solve(n, local, x);
+
+	if (status != 0) {
+		if (rank == 0) {
+			if (status == -6 || status == -10)
+				std::cout << "Jacobian is singular! Stopping. (" << mumps_error_message(status) << ")" << std::endl;
+			else
+				std::cout << "MUMPS failed: " << mumps_error_message(status) << std::endl;
+			if (status == kInaccurateSolution)
+				std::cout << "MUMPS: relative residual of the rejected solution = "
+				          << mumps.stats().relative_residual << std::endl;
+			std::cout << "MUMPS: pivots delayed = " << mumps.stats().delayed_pivots
+			          << ", off-diagonal = " << mumps.stats().off_diagonal_pivots
+			          << ", estimated factor entries = " << mumps.stats().estimated_factor_entries << std::endl;
+		}
+		if (status_out != nullptr) {
+			*status_out = status;
+			Array<double> none (n);
+			none = 0.;
+			return none;
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+		abort();
+	}
+	if (status_out != nullptr)
+		*status_out = 0;
+
+	if (rank == 0) {
+		MumpsStats const& s = mumps.stats();
+		double const dense = 1.0 * n * n;
+		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / dense << " % of dense), factors = "
+		          << s.factor_entries << " (fill " << 1.0 * s.factor_entries / s.nnz << "), flops = "
+		          << s.factor_flops << std::endl;
+		std::cout << "MUMPS: memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total
+		          << " MB, ordering = " << s.ordering_used << ", ICNTL(14) = " << s.mem_relax_used
+		          << ", ICNTL(23) = " << s.mem_budget_mb << " MB" << std::endl;
+		std::cout << "MUMPS: relative residual = " << s.relative_residual << ", pivots delayed = " << s.delayed_pivots
+		          << ", off-diagonal = " << s.off_diagonal_pivots
+		          << ", factor entries estimated/actual = " << s.estimated_factor_entries << " / " << s.factor_entries
+		          << std::endl;
+		std::cout << "Inverting the matrix: " << s.time_gather + s.time_analysis + s.time_factor_solve
+		          << " seconds (gather " << s.time_gather << ", analysis " << s.time_analysis
+		          << ", factor+solve " << s.time_factor_solve << ")" << std::endl;
+	}
+
+	Array<double> X (n);
+	for (int i = 0; i < n; ++i)
+		X.set(i) = x[i];
+	return X;
+}
+#endif
+
+NewtonBackend newton_backend_from_env() {
+#ifdef KADATH_USE_MUMPS
+	std::string const fallback = "mumps";
+#else
+	std::string const fallback = "scalapack";
+#endif
+	std::string const choice = env_on_root("KADATH_LINSOLVE", fallback);
+	if (choice == "scalapack")
+		return NewtonBackend::SCALAPACK;
+#ifdef KADATH_USE_MUMPS
+	if (choice == "mumps")
+		return NewtonBackend::MUMPS;
+#endif
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	if (rank == 0)
+		std::cerr << "KADATH_LINSOLVE=" << choice << " is not available in this build (use scalapack"
+#ifdef KADATH_USE_MUMPS
+		          << " or mumps"
+#endif
+		          << ")" << std::endl;
+	MPI_Barrier(MPI_COMM_WORLD);
+	abort();
+}
+
+bool newton_compare_from_env() {
+	return env_on_root("KADATH_LINSOLVE_COMPARE", "0") == "1";
+}
+
+namespace {
+
+/// KADATH_NEWTON_PROFILE=1: cost of one Jacobian column (do_col_J) vs one matrix-free product (do_JX) and a
+/// values-only residual (sec_member), and the consistency |do_JX(dx) - second| / |second| (J dx = second).
+/// Called after the update is computed and before the fields change, so the solve is unaffected.
+void profile_newton_operators(System_of_eqs& syst, Array<double> const& second, Array<double> const& dx) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	int const n = syst.get_nbr_unknowns();
+	std::vector<int> const probes = {0, n / 4, n / 2, (3 * n) / 4, n - 1};
+
+	auto begin = std::chrono::system_clock::now();
+	for (int col : probes)
+		syst.do_col_J(col);
+	double const t_col = elapsed_time(begin) / probes.size();
+
+	begin = std::chrono::system_clock::now();
+	Array<double> const jx (syst.do_JX(dx));
+	double const t_jx = elapsed_time(begin);
+
+	// Values-only evaluation of every equation (no derivatives): bounds the primal share of a column pass.
+	begin = std::chrono::system_clock::now();
+	syst.sec_member();
+	double const t_res = elapsed_time(begin);
+
+	double diff = 0., ref = 0.;
+	for (int i = 0; i < second.get_size(0); ++i) {
+		diff = std::max(diff, std::fabs(jx(i) - second(i)));
+		ref = std::max(ref, std::fabs(second(i)));
+	}
+	if (rank == 0)
+		std::cout << "Profile: do_col_J = " << t_col << " s/column (" << probes.size() << " columns), do_JX = " << t_jx
+		          << " s (= " << t_jx / t_col << " columns), max|J dx - second| / max|second| = "
+		          << (ref > 0. ? diff / ref : diff) << ", sec_member (values only, all domains) = " << t_res << " s"
+		          << std::endl;
+}
+
+}  // namespace
+
+Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, System_of_eqs::SOLVER solver) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	[[maybe_unused]] NewtonBackend const backend =
+	    (solver == System_of_eqs::GAUSS_NEWTON) ? NewtonBackend::SCALAPACK : newton_backend_from_env();
+
+	Array<double> X (syst.get_nbr_unknowns());
+#ifdef KADATH_USE_MUMPS
+	if (backend == NewtonBackend::MUMPS) {
+		if (rank == 0)
+			std::cout << "Newton linear solver: MUMPS (sparse)" << std::endl;
+		int status = 0;
+		X = newton_update_mumps(syst, second, &status);
+		if (status != 0) {
+			if (env_on_root("KADATH_MUMPS_FALLBACK", "scalapack") != "scalapack") {
+				MPI_Barrier(MPI_COMM_WORLD);
+				abort();
+			}
+			if (rank == 0)
+				std::cout << "WARNING: MUMPS failed (INFOG(1) = " << status
+				          << "); this Newton step falls back to the dense ScaLAPACK solver" << std::endl;
+			return newton_update_scalapack(syst, second, solver);
+		}
+
+		if (newton_compare_from_env()) {
+			Array<double> X_dense (newton_update_scalapack(syst, second, solver));
+			double diff = 0., ref = 0.;
+			for (int i = 0; i < X.get_size(0); ++i) {
+				diff = std::max(diff, std::fabs(X(i) - X_dense(i)));
+				ref = std::max(ref, std::fabs(X_dense(i)));
+			}
+			if (rank == 0)
+				std::cout << "Backend comparison: max|dx_mumps - dx_scalapack| / max|dx_scalapack| = "
+				          << (ref > 0. ? diff / ref : diff) << std::endl;
+		}
+	}
+	else
+#endif
+	{
+		if (rank == 0)
+			std::cout << "Newton linear solver: ScaLAPACK (dense)" << std::endl;
+		X = newton_update_scalapack(syst, second, solver);
+	}
+
+	if (solver == System_of_eqs::NEWTON_RAPHSON && env_on_root("KADATH_NEWTON_PROFILE", "0") == "1")
+		profile_newton_operators(syst, second, X);
+	return X;
+}
+
+}  // namespace linear_solvers
+
+bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SOLVER solver) {
+	// rank and nproc from MPI :
+	int rank, nproc;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
+
+	vars_to_terms();
+	Array<double> second (sec_member());
+	Array<double> abs_errs(check_equations());
+  error = max(abs_errs);
+
+	if (rank==0) {
+    if(abs_errs.nbr != eq_list.size() + eq_int_list.size()) {
+      std::cout << "There is a mismatch between the number of eqs and the registered eq strings."
+                   "Please check the add_eq routines of your space." << std::endl;
+  		//abort();
+    }
+
+    double max = abs_errs.data[0];
+    int i_max = 0;
+
+  	for (int i=0; i<abs_errs.nbr; i++)
+  		if (abs_errs.data[i] > max) {
+  			max = abs_errs.data[i];
+  			i_max = i;
+  		}
+
+		std::cout << "Error init = " << error << ",";
+
+		if(i_max < neq_int && neq_int > 0) {
+      auto [ eq, dom, boundary ] = eq_int_list[i_max];
+      std::cout << " Eq: " << eq << " Dom: " << dom << " Bounday: " << boundary << std::endl;
+		}
+		else {
+      i_max -= neq_int;
+      auto [ eq, dom, boundary ] = eq_list[i_max];
+      std::cout << " Eq: " << eq << " Dom: " << dom << " Bounday: " << boundary << std::endl;
+		}
+	}
+
+	if (error < precision) {
+		return true;
+	}
+	else {
+
+	int m = second.get_size(0);
+  int n = nbr_unknowns;
+
+	if (solver == NEWTON_RAPHSON && n != m) {
+		cerr << "Number of unknowns is different from the number of equations" << endl;
+		cerr << "nbr equations = " << m << endl;
+		cerr << "nbr unknowns  = " << n << endl;
+		abort();
+	}
+
+	if (rank==0) {
+    double size = 1.0 * n * m;
+		std::cout << "DOF / rank = " << n << " x " << m << " / " << nproc <<  " = " << size / nproc << endl;
+	}
+
+	Array<double> X (linear_solvers::newton_update(*this, second, solver));
+
+	auto begin = std::chrono::system_clock::now();
 
 	int conte = 0;
 	espace.xx_to_vars_variable_domains (this, X, conte);
