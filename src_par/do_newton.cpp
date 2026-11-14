@@ -975,7 +975,10 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 	if (backend == NewtonBackend::MUMPS && env_on_root("KADATH_NEWTON_METHOD", "newton") == "krylov") {
 		if (rank == 0)
 			std::cout << "Newton linear solver: Newton-Krylov (GMRES + MUMPS preconditioner)" << std::endl;
-		return newton_update_krylov(syst, second);
+		X = newton_update_krylov(syst, second);
+		if (solver == System_of_eqs::NEWTON_RAPHSON && env_on_root("KADATH_NEWTON_PROFILE", "0") == "1")
+			profile_newton_operators(syst, second, X);
+		return X;
 	}
 	if (backend == NewtonBackend::MUMPS) {
 		if (rank == 0)
