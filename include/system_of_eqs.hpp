@@ -139,6 +139,11 @@ class System_of_eqs {
 	/// cached per operator (Ope_eq::action) until the fields change (vars_to_terms). Same results.
 	bool prune_zero_derivatives = true ;
 	bool prune_active = false ; ///< Pruning is on (inside do_col_J only).
+	/// do_col_J: a node linear in its parts with a non-zero derivative (derivatives, +, -, products with one
+	/// varying factor, quotients with a constant denominator) takes its value from a cache and applies itself
+	/// to the derivatives only. Same results up to round-off.
+	bool prune_linear = true ;
+	bool record_values = false ; ///< Inside sec_member: linear nodes store their value (for prune_linear).
 	int prune_skip_dom[2] = {-1, -1} ; ///< Domains without pruning in this column (moving variable domains).
 	long column_stamp = 0 ; ///< Incremented by every do_col_J (validity of Ope_eq::der_is_zero).
 	long field_generation = 0 ; ///< Incremented when the fields are copied to the terms (cache validity).

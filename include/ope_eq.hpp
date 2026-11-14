@@ -87,6 +87,11 @@ class Ope_eq : public MemoryMappable {
 		mutable bool zero_flag = false ; ///< Result of \c der_is_zero for \c zero_stamp.
 		mutable long cache_generation = -1 ; ///< Field generation of \c cache.
 		mutable std::unique_ptr<Term_eq> cache ; ///< Result with a zero derivative.
+		mutable bool der_request = false ; ///< Set by the parent: return the derivative (as the value) only.
+		mutable long val_generation = -1 ; ///< Field generation of \c val_cache.
+		mutable std::unique_ptr<Term_eq> val_cache ; ///< Value (no derivative) of the result.
+		bool request_derivatives () const ; ///< Linear in the parts with a non-zero derivative: ask them for it.
+		static Term_eq derivative_as_value (const Term_eq&) ; ///< The derivative of a result as the value of a \c Term_eq.
 } ;
 
 /**

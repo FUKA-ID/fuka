@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -189,6 +190,7 @@ class Term_eq : public MemoryMappable {
 	friend class Ope_int ;
 	friend class Ope_grad ;
 	friend class Ope_id ;
+	friend class Ope_eq ;
 	friend class Ope_der ;
 	friend class Ope_der_flat ;
 	friend class Ope_der_background ;

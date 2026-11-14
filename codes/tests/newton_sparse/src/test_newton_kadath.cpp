@@ -208,9 +208,10 @@ void test_jacobian_columns() {
               sci(100. * nnz / (1. * n * n)) + " % of dense)");
 }
 
-/// T3d: do_col_J with skip_clean_domains (definitions and metric recomputed only in touched domains) must be
-/// bitwise identical to recomputing everything, for columns visited in a scrambled order with do_JX and
-/// sec_member calls in between (they invalidate the tracked state).
+/// T3d: do_col_J with skip_clean_domains (definitions and metric recomputed only in touched domains) and
+/// pruned zero-derivative subtrees must be bitwise identical to recomputing everything, for columns visited in a
+/// scrambled order with do_JX and sec_member calls in between (they invalidate the tracked state). With
+/// prune_linear (linear nodes apply themselves to the derivatives only) the columns agree to round-off.
 void check_skip_clean(System_of_eqs& syst, std::string const& label) {
     int const n = syst.get_nbr_unknowns();
     std::vector<int> columns;
@@ -220,29 +221,45 @@ void check_skip_clean(System_of_eqs& syst, std::string const& label) {
         columns.push_back(static_cast<int>((static_cast<long long>(n - 1) * k) / 24));
     syst.skip_clean_domains = false;
     syst.prune_zero_derivatives = false;
+    syst.prune_linear = false;
     syst.sec_member();
     std::vector<Array<double>> reference;
     for (int c : columns)
         reference.push_back(syst.do_col_J(c));
 
-    syst.skip_clean_domains = true;
-    syst.prune_zero_derivatives = true;
-    syst.sec_member();
-    bool same = true;
-    std::size_t const m = columns.size();
-    for (std::size_t k = 0; k < 3 * m; ++k) {
-        std::size_t const idx = (k * 7 + 3) % m;  // 7 is coprime with m = 28: every column, scrambled, 3 times
-        if (k == m) {
-            Array<double> e(n);
-            e = 1.;
-            syst.do_JX(e);
+    for (bool linear : {false, true}) {
+        syst.skip_clean_domains = true;
+        syst.prune_zero_derivatives = true;
+        syst.prune_linear = linear;
+        syst.sec_member();
+        bool same = true;
+        double worst = 0.;
+        std::size_t const m = columns.size();
+        for (std::size_t k = 0; k < 3 * m; ++k) {
+            std::size_t const idx = (k * 7 + 3) % m;  // 7 is coprime with m = 28: every column, scrambled, 3 times
+            if (k == m) {
+                Array<double> e(n);
+                e = 1.;
+                syst.do_JX(e);
+            }
+            if (k == 2 * m)
+                syst.sec_member();
+            Array<double> const col(syst.do_col_J(columns[idx]));
+            same = same && bitwise_equal(col, reference[idx]);
+            double diff = 0., scale = 0.;
+            for (int i = 0; i < col.get_size(0); ++i) {
+                diff = std::max(diff, std::fabs(col(i) - reference[idx](i)));
+                scale = std::max(scale, std::fabs(reference[idx](i)));
+            }
+            worst = std::max(worst, scale > 0. ? diff / scale : diff);
         }
-        if (k == 2 * m)
-            syst.sec_member();
-        same = same && bitwise_equal(syst.do_col_J(columns[idx]), reference[idx]);
+        if (linear)
+            check(worst <= 1e-12, "T3d " + label + ": do_col_J with linear nodes on derivatives only agrees: max rel. diff = " +
+                                      sci(worst) + " (" + std::to_string(m) + " columns, 3 scrambled passes)");
+        else
+            check(same, "T3d " + label + ": do_col_J with skipped clean domains and pruned zero derivatives bitwise identical (" +
+                            std::to_string(m) + " columns, 3 scrambled passes)");
     }
-    check(same, "T3d " + label + ": do_col_J with skipped clean domains and pruned zero derivatives bitwise identical (" +
-                    std::to_string(m) + " columns, 3 scrambled passes)");
 }
 
 /// T3b: J e_j from do_JX must equal the assembled column j (Newton-Krylov relies on it), whatever the previous

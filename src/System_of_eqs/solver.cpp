@@ -79,6 +79,7 @@ Array<double> System_of_eqs::sec_member() {
 
 	vars_to_terms() ;
 	lap(times_sec.setup) ;
+	record_values = prune_zero_derivatives && prune_linear ;
 
 	if (met!=0x0)
 	  for (int d=dom_min ; d<=dom_max ; d++)
@@ -97,6 +98,7 @@ Array<double> System_of_eqs::sec_member() {
 	for (int i=0 ; i<neq ; i++)
 	     eq[i]->apply(conte, results) ;
 	lap(times_sec.eqs) ;
+	record_values = false ;
 	if (profile_phases)
 		times_sec.calls ++ ;
 
