@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -567,7 +568,7 @@ void System_of_eqs::xx_to_ders (const Array<double>& xx) {
 	espace.xx_to_ders_variable_domains(xx, conte) ;
 	
 	for (int i=0 ; i<nvar_double ; i++) {
-		for (int dd=dom_min ; dd<dom_max ; dd++) {
+		for (int dd=dom_min ; dd<=dom_max ; dd++) {
 			term_double[pos_term]->set_der_d(xx(conte)) ;
 			pos_term ++ ;
 		}
