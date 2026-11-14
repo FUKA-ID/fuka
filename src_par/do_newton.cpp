@@ -516,8 +516,11 @@ void report_phase_times(System_of_eqs const& syst, char const* what, System_of_e
 /// @param drop_tolerance > 0 removes entries negligible relative to both their row and column maximum before
 /// factoring (drop_negligible): the factors and x then belong to a perturbed matrix, so only preconditioners
 /// may use it.
+/// @param residual_tolerance > 0 replaces a stricter MUMPS residual check (KADATH_MUMPS_RESIDUAL_TOL): for factors
+/// used only as a preconditioner, whose result GMRES checks against the true J v.
 int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::vector<double>& x,
-                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.) {
+                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.,
+                       double residual_tolerance = 0.) {
 	int rank, nproc;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
@@ -557,7 +560,9 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	for (std::size_t attempt = 0; attempt < ladder.size(); ++attempt) {
 		x.assign(second.get_data(), second.get_data() + n);
 		solver.reset();
-		solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, ladder[attempt].options);
+		MumpsOptions options = ladder[attempt].options;
+		options.residual_tolerance = std::max(options.residual_tolerance, residual_tolerance);
+		solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, options);
 		status = solver->solve(n, local, x);
 		if (rank == 0 && status != 0) {
 			MumpsStats const& f = solver->stats();
@@ -688,7 +693,7 @@ void reset_newton_krylov() {
 /// factors before each of these refactorizations except age (see below).
 /// KADATH_KRYLOV_DROP > 0 factors the Jacobian without entries negligible in their row and column; the exact
 /// step is then solved by GMRES with the true J v to KADATH_KRYLOV_EXACT_TOL (1e-10), and refactored without
-/// dropping if that fails.
+/// dropping if that fails. The dropped factors only need MUMPS residual <= KADATH_KRYLOV_PRECOND_RESIDUAL_TOL (1e-6).
 Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& second) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
@@ -707,6 +712,9 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	double const eta_max = env_double_on_root("KADATH_KRYLOV_ETA_MAX", 1e-3);
 	double const drop = env_double_on_root("KADATH_KRYLOV_DROP", 0.);
 	double const exact_tolerance = env_double_on_root("KADATH_KRYLOV_EXACT_TOL", 1e-10);
+	// MUMPS residual check for the dropped (preconditioner-only) factors: GMRES with the true J v finishes the
+	// step to exact_tolerance, so a slightly inaccurate factorization must not send MUMPS down the retry ladder.
+	double const preconditioner_residual = env_double_on_root("KADATH_KRYLOV_PRECOND_RESIDUAL_TOL", 1e-6);
 	bool const lazy = env_on_root("KADATH_KRYLOV_REFRESH", "classic") == "lazy";
 	int const trial_iterations = std::stoi(env_on_root("KADATH_KRYLOV_TRIAL_ITERATIONS", "16"));
 
@@ -798,7 +806,7 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ", ||F|| = " << norm
 		          << ", previous " << st.previous_norm << ")" << std::endl;
 	st.preconditioner.reset();
-	int status = sparse_newton_step(syst, second, x, st.preconditioner, drop);
+	int status = sparse_newton_step(syst, second, x, st.preconditioner, drop, (drop > 0.) ? preconditioner_residual : 0.);
 	if (status == 0 && drop > 0.) {
 		// The factors belong to the dropped matrix: solve with the true J v, preconditioned by them.
 		preconditioner_status = 0;
