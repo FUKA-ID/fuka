@@ -18,10 +18,13 @@ source $HOME_KADATH/.venv/bin/activate
 DIRS=(
   codes/FUKA
   codes/PythonTools
+  codes/tests/newton_sparse
   include/Configurator
   include/EOS/ghl_eos_helpers/
   include/FUKA_Solvers
+  include/Linear_solvers
   include/Solvers
+  src/Linear_solvers
   src/Utilities/Configurator
   src/Utilities/EOS
   src/Utilities/Exporters
