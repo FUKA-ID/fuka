@@ -18,6 +18,7 @@ namespace {
 constexpr int kJobInit = -1;
 constexpr int kJobEnd = -2;
 constexpr int kJobAnalysis = 1;
+constexpr int kJobSolve = 3;
 constexpr int kJobFactorSolve = 5;
 
 /// MUMPS reports large counts as negative numbers of millions.
@@ -192,6 +193,7 @@ MumpsOptions MumpsOptions::from_env() {
     options.blr_tolerance =
         env_double("KADATH_MUMPS_BLR", options.blr_tolerance);
     options.out_of_core = env_int("KADATH_MUMPS_OOC", 0) != 0;
+    options.retry = env_int("KADATH_MUMPS_RETRY", 1) != 0;
     options.max_mem_mb = env_int("KADATH_MUMPS_MAX_MEM_MB", options.max_mem_mb);
     options.permutation =
         env_int("KADATH_MUMPS_PERMUTATION", options.permutation);
@@ -223,7 +225,10 @@ MumpsSolver::MumpsSolver(MPI_Comm comm, MumpsOptions const& options)
 }
 
 MumpsSolver::~MumpsSolver() {
-    run(kJobEnd);
+    int finalized = 0;
+    MPI_Finalized(&finalized);
+    if (!finalized)  // JOB=-2 communicates; after MPI_Finalize the memory is released by the process exit
+        run(kJobEnd);
 }
 
 void MumpsSolver::run(int job) {
@@ -237,6 +242,7 @@ int MumpsSolver::solve(int n,
     int nproc;
     MPI_Comm_size(comm_, &nproc);
     stats_ = MumpsStats{};
+    factored_ = false;
 
     if (static_cast<int>(rhs_solution.size()) != n)
         throw std::invalid_argument(
@@ -387,9 +393,51 @@ int MumpsSolver::solve(int n,
         scale = std::max(scale, std::fabs(b[i]));
     }
     stats_.relative_residual = scale > 0. ? diff / scale : diff;
+
+    // The matrix arrays are the caller's or local to this call; JOB=3 only needs the factors.
+    id_.irn = id_.jcn = id_.irn_loc = id_.jcn_loc = nullptr;
+    id_.a = id_.a_loc = id_.rhs = nullptr;
     if (!(stats_.relative_residual <= options_.residual_tolerance))
         return kInaccurateSolution;
+    factored_ = true;
+    n_ = n;
     return 0;
+}
+
+int MumpsSolver::solve_factored(std::vector<double>& rhs_solution) {
+    if (!factored_ || static_cast<int>(rhs_solution.size()) != n_)
+        return -1;
+    set_icntl(20, 0);
+    set_icntl(21, 0);
+    id_.nrhs = 1;
+    id_.lrhs = n_;
+    id_.rhs = rank_ == 0 ? rhs_solution.data() : nullptr;
+    run(kJobSolve);
+    id_.rhs = nullptr;
+    if (infog(1) < 0)
+        return infog(1);
+    MPI_Bcast(rhs_solution.data(), n_, MPI_DOUBLE, 0, comm_);
+    return 0;
+}
+
+std::vector<MumpsAttempt> mumps_retry_ladder(MumpsOptions const& base) {
+    std::vector<MumpsAttempt> ladder = {{"configured options", base}};
+    if (!base.retry)
+        return ladder;
+    MumpsOptions recovery = base;
+    recovery.scaling = -1;
+    recovery.max_mem_mb = 0;
+    recovery.max_mem_retries = MumpsOptions{}.max_mem_retries;
+
+    MumpsOptions structural = recovery;
+    structural.centralized = true;
+    structural.permutation = 1;
+    ladder.push_back({"structural permutation ICNTL(6)=1", structural});
+
+    MumpsOptions distributed = recovery;
+    distributed.centralized = false;
+    ladder.push_back({"distributed input", distributed});
+    return ladder;
 }
 
 std::string mumps_error_message(int infog1) {

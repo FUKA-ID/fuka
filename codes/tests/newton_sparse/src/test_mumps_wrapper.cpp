@@ -15,6 +15,7 @@
  *  - the third matrix needs the CNTL(1) = 0.1 default: with the MUMPS default 0.01 it only reaches ~1e-11
  *  - centralized input: repeated solves and other column distributions agree to roundoff (<= 1e-12)
  *  - a solution failing the residual check is rejected (kInaccurateSolution)
+ *  - retry ladder: failing first attempt (too small configured budget) recovered by the next configuration
  *  - a structurally singular matrix (an unknown in no equation: empty column) is reported (-6 or -10)
  *
  * Run with 1, 2 and 4 MPI ranks; returns 0 if all checks pass (77 = skipped, built without MUMPS).
@@ -265,6 +266,45 @@ void check_residual_rejection(MumpsOptions options, std::string const& label) {
               sci(solver.stats().relative_residual));
 }
 
+/// Retry ladder: a configured budget too small for the matrix (no workspace retries) must fail the first attempt;
+/// the recovery attempts (automatic budget) must then succeed on the same triplets.
+void check_retry_ladder(MumpsOptions base, std::string const& label) {
+    base.verbosity = 0;
+    MumpsOptions no_retry = base;
+    no_retry.retry = false;
+    check(mumps_retry_ladder(no_retry).size() == 1,
+          label + ": retry = false gives a single attempt");
+    auto const ladder = mumps_retry_ladder(base);
+    check(ladder.size() == 3 && ladder[1].options.permutation == 1 &&
+              ladder[1].options.centralized && !ladder[2].options.centralized &&
+              ladder[1].options.max_mem_mb == 0,
+          label +
+              ": ladder = configured, structural permutation, distributed "
+              "input (automatic budget)");
+
+    base.max_mem_mb = 1;
+    base.max_mem_retries = 0;
+    auto const tight = mumps_retry_ladder(base);
+    Matrix const a = make_matrix(12, 80, 3, 51, false);
+    int const n = static_cast<int>(a.size());
+    std::vector<double> x_true(n, 1.);
+    std::vector<double> const b = multiply(a, x_true);
+    SparseTriplets local = local_columns(a);
+
+    std::vector<int> status;
+    for (auto const& attempt : tight) {
+        MumpsSolver solver(MPI_COMM_WORLD, attempt.options);
+        std::vector<double> x = b;
+        status.push_back(solver.solve(n, local, x));
+        if (status.back() == 0)
+            break;
+    }
+    check(status.size() >= 2 && status[0] != 0 && status.back() == 0,
+          label + ": 1 MB budget fails attempt 1 (status " +
+              std::to_string(status[0]) + "), attempt " +
+              std::to_string(status.size()) + " succeeds");
+}
+
 void run_singular(MumpsOptions options, std::string const& label) {
     options.verbosity = 0;
     MumpsSolver solver(MPI_COMM_WORLD, options);
@@ -300,6 +340,7 @@ int main(int argc, char** argv) {
     check_distribution_independence(centralized,
                                     "centralized distribution independence");
     check_residual_rejection(centralized, "centralized residual check");
+    check_retry_ladder(centralized, "retry ladder");
     check_residual_rejection(distributed, "distributed residual check");
     run_singular(centralized, "centralized singular");
     run_singular(distributed, "distributed singular");

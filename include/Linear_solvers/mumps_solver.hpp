@@ -37,6 +37,8 @@ struct MumpsOptions {
         0.;  ///< CNTL(7) with ICNTL(35)=2 when > 0 (lossy block low-rank factors).
     bool out_of_core =
         false;  ///< ICNTL(22)=1; the directory comes from MUMPS_OOC_TMPDIR.
+    /// Newton steps retry failed or rejected solves with the other configurations of mumps_retry_ladder.
+    bool retry = true;
     /// CNTL(1): relative pivoting threshold. The MUMPS default 0.01 allowed pivot growth to a 1e-11
     /// residual on a Kadath-like test matrix (test_mumps_wrapper); 0.1 restores 1e-16 for ~4 % more fill.
     double pivot_threshold = 0.1;
@@ -110,6 +112,15 @@ class MumpsSolver {
     ///         kInaccurateSolution if max|A x - b| / max|b| > residual_tolerance.
     int solve(int n, SparseTriplets& local, std::vector<double>& rhs_solution);
 
+    /// Solves A x = b again with the factors of the last successful solve() (JOB=3), e.g. as a preconditioner
+    /// for an updated A; collective. No residual check (the factors may belong to an older matrix).
+    /// @param rhs_solution b on input (read on rank 0, length n on every rank); x on output on every rank.
+    /// @return 0 on success, -1 without factors, otherwise INFOG(1).
+    int solve_factored(std::vector<double>& rhs_solution);
+
+    /// True when the last solve() succeeded, so solve_factored() can be used.
+    bool has_factors() const { return factored_; }
+
     MumpsStats const& stats() const { return stats_; }
 
    private:
@@ -124,10 +135,23 @@ class MumpsSolver {
     MumpsOptions options_;
     MumpsStats stats_;
     DMUMPS_STRUC_C id_;
+    bool factored_ = false;
+    int n_ = 0;
 };
 
 /// Human-readable message for a MUMPS INFOG(1) error code.
 std::string mumps_error_message(int infog1);
+
+/// A named configuration of the MUMPS retry ladder.
+struct MumpsAttempt {
+    std::string name;
+    MumpsOptions options;
+};
+
+/// Configurations a Newton step tries in order on the same assembled matrix: @p base, then (if base.retry)
+/// the structural permutation ICNTL(6)=1 and distributed input. The retries use the automatic scaling and
+/// memory budget, because they are a recovery path; both solved every dumped BH Jacobian accurately.
+std::vector<MumpsAttempt> mumps_retry_ladder(MumpsOptions const& base);
 
 }  // namespace linear_solvers
 }  // namespace Kadath

@@ -8,7 +8,7 @@ the library was built without MUMPS (`KADATH_USE_MUMPS` undefined).
 |---|---|---|
 | `test_sparse_triplets` | serial | block size rule, 1-D block-cyclic column ownership vs ScaLAPACK `numroc`/`indxl2g`, column to COO round trip (only exact zeros dropped) |
 | `test_mumps_wrapper` | 1, 2, 4 | `MumpsSolver` on a block-sparse matrix with bordering rows/columns and a zero diagonal: residual, error, identical solution on all ranks, instance reuse, centralized/distributed input, ParMETIS, roundoff-level independence of the column distribution, singular matrix detection |
-| `test_newton_kadath` | 1, 4 | a nonlinear Kadath system with a `var_double` and an `eq_int` row (analytic solution `P = log(1 + a/r)`, `lam = 1/2`): `do_col_J` determinism, one Newton update MUMPS vs ScaLAPACK, full solves with both backends, ScaLAPACK fallback when MUMPS fails (bitwise identical to the ScaLAPACK solve) |
+| `test_newton_kadath` | 1, 4 | a nonlinear Kadath system with a `var_double` and an `eq_int` row (analytic solution `P = log(1 + a/r)`, `lam = 1/2`): `do_col_J` determinism, one Newton update MUMPS vs ScaLAPACK, full solves with both backends, opt-in ScaLAPACK fallback when every MUMPS attempt is rejected (bitwise identical to the ScaLAPACK solve) |
 
 ## Build and run
 
@@ -28,7 +28,8 @@ All three finish in well under a minute.
 | Variable | Values | Effect |
 |---|---|---|
 | `KADATH_LINSOLVE` | `mumps` (default with MUMPS), `scalapack` | Newton-Raphson linear solver |
-| `KADATH_MUMPS_FALLBACK` | `scalapack` (default), `abort` | what a failed MUMPS step does: redo it with ScaLAPACK (warning printed) or abort |
+| `KADATH_MUMPS_RETRY` | `1` (default), `0` | retry a failed or rejected solve with the structural permutation, then distributed input, on the same matrix |
+| `KADATH_MUMPS_FALLBACK` | `abort` (default), `scalapack` | after the retry ladder fails: abort, or redo the step with dense ScaLAPACK (re-assembles, needs n² memory) |
 | `KADATH_MUMPS_MAX_MEM_MB` | MB, default 0 (MUMPS estimate) | ICNTL(23) per-rank working-memory budget |
 | `KADATH_NEWTON_PROFILE` | `1` | print do_col_J / do_JX / values-only residual timings and the J dx consistency each step |
 | `KADATH_NEWTON_DUMP_PATTERN` | path prefix | write the Jacobian of the first `KADATH_NEWTON_DUMP_STEPS` (3) steps with ≥ `KADATH_NEWTON_DUMP_MIN_N` unknowns; analyse with `replay_jacobian` |
