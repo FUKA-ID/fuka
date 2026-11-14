@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -17,6 +18,7 @@
     along with Kadath.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
 #include "system_of_eqs.hpp"
 #include "scalar.hpp"
 #include "metric.hpp"
@@ -84,9 +86,46 @@ Array<double> System_of_eqs::sec_member() {
 	return res ;
 }
 
+void System_of_eqs::find_variable_domains() {
+	if (variable_domains_known)
+		return ;
+	variable_domains_known = true ;
+	variable_domains.clear() ;
+	int const nvd = espace.nbr_unknowns_from_variable_domains() ;
+	for (int cc=0 ; cc<nvd ; cc++) {
+		int conte = 0 ;
+		Array<int> zedoms (2) ;
+		zedoms = -1 ;
+		espace.affecte_coef_to_variable_domains(conte, cc, zedoms) ;
+		for (int d=0 ; d<zedoms.get_size(0) ; d++)
+			if ((zedoms(d)!=-1) && (std::find(variable_domains.begin(), variable_domains.end(), zedoms(d))==variable_domains.end()))
+				variable_domains.push_back(zedoms(d)) ;
+	}
+}
+
 Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 
-	xx_to_ders(xx) ;	
+	find_variable_domains() ;
+	xx_to_ders(xx) ;
+	// As in do_col_J (update_terms_from_variable_domains): in a variable domain the collocation points move with
+	// the shape, so every term and constant field there also changes by update_term_eq's contribution, linear in
+	// the domain derivative that xx_to_ders has just set. A term's derivative is the sum of both parts.
+	if (!variable_domains.empty()) {
+		auto is_variable = [this](int dom) {
+			return std::find(variable_domains.begin(), variable_domains.end(), dom) != variable_domains.end() ;
+		} ;
+		for (int i=0 ; i<nterm ; i++)
+			if (is_variable(term[i]->get_dom())) {
+				Tensor const field_part (term[i]->get_der_t()) ;
+				espace.get_domain(term[i]->get_dom())->update_term_eq(term[i]) ;
+				term[i]->set_der_t(term[i]->get_der_t() + field_part) ;
+			}
+		for (int i=0 ; i<nterm_cst ; i++)
+			if ((cst[i]->get_type_data()==TERM_T) && is_variable(cst[i]->get_dom()))
+				espace.get_domain(cst[i]->get_dom())->update_term_eq(cst[i]) ;
+			else
+				cst[i]->set_der_zero() ;
+	}
 	if (met!=0x0)  
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		met->update(d) ;

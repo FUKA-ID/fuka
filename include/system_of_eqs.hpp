@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement & Gregoire Martinon
 
@@ -119,6 +120,12 @@ class System_of_eqs {
 
 	int nbr_unknowns ; ///< Number of unknowns (basically the number of coefficients of all the unknown fields, once regularities are taken into account).
 	int nbr_conditions ; ///< Total number of conditions (the number of coefficients of all the equations, once regularities are taken into account).
+	/// Process-unique id of this system (copies get a new one). Lets solvers tell a new system from an old one
+	/// even when it is constructed at the same address (e.g. successive stages on the stack).
+	unsigned long instance_id = next_instance_id() ;
+	static unsigned long next_instance_id() {static unsigned long counter = 0 ; return ++counter ;}
+	std::vector<int> variable_domains ; ///< Domains whose shape is an unknown (see \c find_variable_domains).
+	bool variable_domains_known = false ; ///< \c variable_domains has been determined.
 
   std::vector<std::tuple<std::string, int, int>> eq_list; ///< List of all equations through all domains, to match indices to expressions.
   std::vector<std::tuple<std::string, int, int>> eq_int_list; ///< List of all integral equations through all domains, to match indices to expressions.
@@ -178,6 +185,8 @@ class System_of_eqs {
 	* Returns the number of unknowns.
 	*/
 	int get_nbr_unknowns() const {return nbr_unknowns ;} ;
+	/// Process-unique id of this system (see \c instance_id).
+	unsigned long get_instance_id() const {return instance_id ;} ;
 
 	/**
 	* Returns a pointer on a \c Term_eq corresponding to an unknown number.
@@ -877,6 +886,11 @@ class System_of_eqs {
 	* @param zedoms : the number of all the variable domains.
 	*/
 	void update_terms_from_variable_domains(const Array<int>& zedoms) ;
+	/**
+	* Determines (once) the domains whose shape depends on unknowns, by asking the space which domains each
+	* variable-domain unknown moves. Changes the domain derivative state: call before setting it.
+	*/
+	void find_variable_domains() ;
 
 	/**
 	* Does one step of the Newton-Raphson iteration with a linesearch algorithm.

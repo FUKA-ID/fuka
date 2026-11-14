@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -357,7 +358,6 @@ void Domain_shell_outer_adapted::update_variable (const Val_domain& cor_outer_ra
 
 void Domain_shell_outer_adapted::xx_to_ders_from_adapted(const Array<double>& xx, int& pos) const {
 
-    cout << "enter xx_to_ders_from_adapted" << endl ;
 
     Val_domain auxi (this) ;
     auxi.std_base() ;
@@ -383,12 +383,12 @@ void Domain_shell_outer_adapted::xx_to_ders_from_adapted(const Array<double>& xx
 	     if ((jmin==1) && (mm%2==0)) {
 	      // Galerkin basis COS EVEN
 	      pos_cf.set(1) = 0 ;
-	      auxi.cf->set(pos_cf) = -xx(pos) ;
+	      auxi.cf->set(pos_cf) -= xx(pos) ; // accumulate over j (Galerkin j = 0 coefficient)
 	    }
 	    if ((jmin==1) && (mm%2==1)) {
 	      // Galerkin basis SIN ODD
 	      pos_cf.set(1) = 0 ;
-	      auxi.cf->set(pos_cf) = -(2*j+1)*xx(pos) ;
+	      auxi.cf->set(pos_cf) -= (2*j+1)*xx(pos) ; // accumulate over j
 	    }
 	    pos ++ ;
 	  }

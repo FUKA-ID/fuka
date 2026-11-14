@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2018 Philippe Grandclement
 
@@ -21,6 +22,7 @@
 #define __LIST_COMP_HPP_
 
 #include "headcpp.hpp"
+#include "array.hpp"
 
 namespace Kadath {
 /**
