@@ -954,7 +954,7 @@ void profile_newton_operators(System_of_eqs& syst, Array<double> const& second, 
 		if (rank == 0 && rel > 1e-12)
 			std::cout << "Profile: do_JX(e_" << col << ") differs from do_col_J(" << col << "): max|diff| = " << d
 			          << " at row " << row << " (do_col_J " << jc(row) << ", do_JX " << jv(row) << "), relative "
-			          << rel << std::endl;
+			          << rel << "; column: " << syst.column_label() << "; row: " << syst.row_label(row) << std::endl;
 		if (rel > worst) {
 			worst = rel;
 			worst_col = col;

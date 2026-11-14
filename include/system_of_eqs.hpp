@@ -166,6 +166,11 @@ class System_of_eqs {
 	int get_ndef () const {return ndef ;} ; ///< Number of definitions.
 	/// Name and domain of definition \c i.
 	std::string def_label (int i) const {return std::string(names_def[i]) + " (dom " + std::to_string(def[i]->get_dom()) + ")" ;} ;
+	/// What the last do_col_J perturbed: unknown field (-1: none), number unknown (-1: none), domain of the field
+	/// coefficient, moving variable domains (-1: none).
+	int last_col_var = -1, last_col_double = -1, last_col_dom = -1, last_col_zedoms[2] = {-1, -1} ;
+	std::string column_label () const ; ///< Description of the last do_col_J column (diagnostics).
+	std::string row_label (int row) const ; ///< Equation holding \c row of the residual (diagnostics).
     protected:
 
   std::vector<std::tuple<std::string, int, int>> eq_list; ///< List of all equations through all domains, to match indices to expressions.

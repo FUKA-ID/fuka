@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <typeinfo>
 #include "system_of_eqs.hpp"
 #include "scalar.hpp"
 #include "metric.hpp"
@@ -238,6 +239,11 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	prune_active = prune_zero_derivatives ;
 	prune_skip_dom[0] = zedoms(0) ;
 	prune_skip_dom[1] = zedoms(1) ;
+	last_col_var = -1 ;
+	last_col_double = -1 ;
+	last_col_dom = -1 ;
+	last_col_zedoms[0] = zedoms(0) ;
+	last_col_zedoms[1] = zedoms(1) ;
 	if (zedoms(0)!=-1)
 	  update_terms_from_variable_domains(zedoms) ;
 	else {
@@ -253,6 +259,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			for (int dd=dom_min ; dd<=dom_max ; dd++)
 				term_double[i*ndom+(dd-dom_min)]->set_der_d(1.) ;
 			is_var_double = true ;
+			last_col_double = i ;
 		}
 		else
 			for (int dd=dom_min ; dd<=dom_max ; dd++)
@@ -269,8 +276,11 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			// Si la base n'est pas affectee on la met
 			if ((!auxi(auxi.indices(j))(dom).check_if_zero()) && (!auxi(auxi.indices(j))(dom).get_base().is_def()))
 				auxi.set(auxi.indices(j)).set_domain(dom).set_base() = term[i]->get_val_t()(auxi.indices(j))(dom).get_base() ;
-			if ((zedom==-1) && (!auxi(auxi.indices(j))(dom).check_if_zero()))
+			if ((zedom==-1) && (!auxi(auxi.indices(j))(dom).check_if_zero())) {
 				zedom = dom ;
+				last_col_dom = dom ;
+				last_col_var = i / ndom ;
+			}
 		}
 
 		term[i]->set_der_t(auxi + term[i]->get_der_t()) ;
@@ -389,4 +399,33 @@ void System_of_eqs::update_terms_from_variable_domains(const Array<int>& zedoms)
 	      else
 		cst[i]->set_der_zero() ;
 	  } 
-}}
+}
+
+std::string System_of_eqs::column_label () const {
+	std::string res ;
+	if (last_col_double!=-1)
+		res = std::string("number ") + names_var_double[last_col_double] ;
+	else if (last_col_var!=-1)
+		res = std::string("field ") + names_var[last_col_var] + " (dom " + std::to_string(last_col_dom) + ")" ;
+	else if (last_col_zedoms[0]!=-1)
+		res = "shape of domains " + std::to_string(last_col_zedoms[0]) + "," + std::to_string(last_col_zedoms[1]) ;
+	else
+		res = "no term (regularity / zero coefficient)" ;
+	return res ;
+}
+
+std::string System_of_eqs::row_label (int row) const {
+	if (row<0)
+		return "none" ;
+	if (row<neq_int)
+		return "integral equation " + std::to_string(row) ;
+	int pos = neq_int ;
+	for (int i=0 ; i<neq ; i++) {
+		int const nc = eq[i]->get_n_cond_tot() ;
+		if (row<pos+nc)
+			return "equation " + std::to_string(i) + " (" + typeid(*eq[i]).name() + ", dom " + std::to_string(eq[i]->ndom) + ", condition " + std::to_string(row-pos) + " of " + std::to_string(nc) + ")" ;
+		pos += nc ;
+	}
+	return "beyond the equations" ;
+}
+}
