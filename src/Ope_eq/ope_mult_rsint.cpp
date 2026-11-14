@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_mult_rsint::Ope_mult_rsint (const System_of_eqs* zesys, Ope_eq* target) : Op
 Ope_mult_rsint::~Ope_mult_rsint() {
 }
 
-Term_eq Ope_mult_rsint::action() const {
+Term_eq Ope_mult_rsint::compute() const {
 
 	Term_eq part (parts[0]->action()) ;
 	// Check it is a tensor

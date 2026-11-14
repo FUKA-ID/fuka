@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_div_1mx2::Ope_div_1mx2 (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq
 Ope_div_1mx2::~Ope_div_1mx2() {
 }
 
-Term_eq Ope_div_1mx2::action() const {
+Term_eq Ope_div_1mx2::compute() const {
 		
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

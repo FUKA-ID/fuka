@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -33,7 +34,7 @@ Ope_der::Ope_der (const System_of_eqs* zesys, int tt, char ind, Ope_eq* target) 
 Ope_der::~Ope_der() {
 }
 
-Term_eq Ope_der::action() const {
+Term_eq Ope_der::compute() const {
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor
 	if (target.type_data != TERM_T) {

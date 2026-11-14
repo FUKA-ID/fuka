@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_dr::Ope_dr (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, targ
 Ope_dr::~Ope_dr() {
 }
 
-Term_eq Ope_dr::action() const {
+Term_eq Ope_dr::compute() const {
 	Term_eq target (parts[0]->action()) ;
 	return target.val_t->get_space().get_domain(dom)->dr_term_eq(target) ;
 	

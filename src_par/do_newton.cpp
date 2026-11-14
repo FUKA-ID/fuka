@@ -966,6 +966,8 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 	    (solver == System_of_eqs::GAUSS_NEWTON) ? NewtonBackend::SCALAPACK : newton_backend_from_env();
 	// KADATH_JACOBIAN_SKIP_CLEAN=0: do_col_J recomputes definitions and metric in every domain (old behaviour).
 	syst.skip_clean_domains = env_on_root("KADATH_JACOBIAN_SKIP_CLEAN", "1") == "1";
+	// KADATH_JACOBIAN_PRUNE=0: do_col_J recomputes operator subtrees with a zero derivative (old behaviour).
+	syst.prune_zero_derivatives = env_on_root("KADATH_JACOBIAN_PRUNE", "1") == "1";
 	syst.profile_phases = env_on_root("KADATH_NEWTON_PROFILE", "0") != "0";  // 2: phases only, no extra probes
 
 	Array<double> X (syst.get_nbr_unknowns());

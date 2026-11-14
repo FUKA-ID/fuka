@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_grad::Ope_grad (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, 
 Ope_grad::~Ope_grad() {
 }
 
-Term_eq Ope_grad::action() const {
+Term_eq Ope_grad::compute() const {
 	Term_eq target (parts[0]->action()) ;
 	return target.val_t->get_space().get_domain(dom)->grad_term_eq(target) ;
 }}

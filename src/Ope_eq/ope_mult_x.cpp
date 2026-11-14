@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_mult_x::Ope_mult_x (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zes
 Ope_mult_x::~Ope_mult_x() {
 }
 
-Term_eq Ope_mult_x::action() const {
+Term_eq Ope_mult_x::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

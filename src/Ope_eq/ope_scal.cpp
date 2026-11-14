@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -30,7 +31,7 @@ Ope_scal::Ope_scal (const System_of_eqs* zesys, Ope_eq* aa, Ope_eq* bb) : Ope_eq
 Ope_scal::~Ope_scal() {
 }
 
-Term_eq Ope_scal::action() const {
+Term_eq Ope_scal::compute() const {
 	return scalar_product (parts[0]->action(), parts[1]->action()) ;
 }
 }

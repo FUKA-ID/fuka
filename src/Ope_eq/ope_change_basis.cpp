@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_change_basis::Ope_change_basis (const System_of_eqs* zesys, int base, Ope_eq
 Ope_change_basis::~Ope_change_basis() {
 }
 
-Term_eq Ope_change_basis::action() const {
+Term_eq Ope_change_basis::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

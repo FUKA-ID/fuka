@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_determinant::Ope_determinant (const System_of_eqs* zesys, Ope_eq* target) : 
 Ope_determinant::~Ope_determinant() {
 }
 
-Term_eq Ope_determinant::action() const {
+Term_eq Ope_determinant::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	

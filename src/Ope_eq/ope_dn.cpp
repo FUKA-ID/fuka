@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_dn::Ope_dn (const System_of_eqs* zesys, int bb, Ope_eq* target) : Ope_eq(zes
 Ope_dn::~Ope_dn() {
 }
 
-Term_eq Ope_dn::action() const {
+Term_eq Ope_dn::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	return target.val_t->get_space().get_domain(dom)->der_normal_term_eq(target, bound) ;

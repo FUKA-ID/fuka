@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -30,6 +31,6 @@ Ope_div::Ope_div (const System_of_eqs* zesys, Ope_eq* aa, Ope_eq* bb) : Ope_eq(z
 Ope_div::~Ope_div() {
 }
 
-Term_eq Ope_div::action() const {
+Term_eq Ope_div::compute() const {
 	return parts[0]->action() / parts[1]->action() ;
 }}

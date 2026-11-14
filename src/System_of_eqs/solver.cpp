@@ -23,6 +23,7 @@
 #include "system_of_eqs.hpp"
 #include "scalar.hpp"
 #include "metric.hpp"
+#include "metric_nophi.hpp"
 namespace Kadath {
 namespace {
 /// Seconds since the first call; only used when System_of_eqs::profile_phases is set.
@@ -56,7 +57,13 @@ Array<double> System_of_eqs::check_equations() {
       return errors ;
 }
 
+bool System_of_eqs::has_flat_metric () const {
+	return (met!=0x0) && ((dynamic_cast<const Metric_flat*>(met)!=0x0) || (dynamic_cast<const Metric_flat_nophi*>(met)!=0x0)) ;
+}
+
 Array<double> System_of_eqs::sec_member() {
+
+	prune_active = false ;
 
 	der_clean.clear() ;
 	double t_phase = profile_phases ? phase_clock() : 0. ;
@@ -225,6 +232,10 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	zedoms = - 1 ;
 	// Variable Domains :
 	espace.affecte_coef_to_variable_domains(conte, cc, zedoms) ;
+	column_stamp ++ ;
+	prune_active = prune_zero_derivatives ;
+	prune_skip_dom[0] = zedoms(0) ;
+	prune_skip_dom[1] = zedoms(1) ;
 	if (zedoms(0)!=-1)
 	  update_terms_from_variable_domains(zedoms) ;
 	else {
@@ -343,6 +354,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			}  
 	}
 	
+	prune_active = false ;
 	lap(times_col_J.exp) ;
 	if (profile_phases)
 		times_col_J.calls ++ ;

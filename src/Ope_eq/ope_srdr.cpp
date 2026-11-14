@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_srdr::Ope_srdr (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, 
 Ope_srdr::~Ope_srdr() {
 }
 
-Term_eq Ope_srdr::action() const {
+Term_eq Ope_srdr::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

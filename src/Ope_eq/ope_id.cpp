@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -46,7 +47,24 @@ Ope_id::~Ope_id() {
 		delete type_ind ;
 }
 
-Term_eq Ope_id::action() const {
+// Leaf: the derivative of the target, plus the metric when indices are moved (unless it is flat).
+bool Ope_id::der_zero_local() const {
+	if (target->type_data==TERM_D) {
+		if ((target->der_d!=0x0) && (*target->der_d!=0.))
+			return false ;
+	}
+	else if (target->der_t!=0x0) {
+		for (int j=0 ; j<target->der_t->get_n_comp() ; j++)
+			if (!(*target->der_t)(target->der_t->indices(j))(dom).check_if_zero())
+				return false ;
+	}
+	for (int i=0 ; i<valence ; i++)
+		if ((target->val_t==0x0) || (target->val_t->get_index_type(i)!=(*type_ind)(i)))
+			return syst->has_flat_metric() ;
+	return true ;
+}
+
+Term_eq Ope_id::compute() const {
 
 	Term_eq auxi (*target) ;
 	// First put the names (not for doubles or scalars...)

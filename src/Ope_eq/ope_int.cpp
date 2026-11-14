@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_int::Ope_int (const System_of_eqs* zesys, int bb, Ope_eq* target) : Ope_eq(z
 Ope_int::~Ope_int() {
 }
 
-Term_eq Ope_int::action() const {
+Term_eq Ope_int::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	return target.val_t->get_space().get_domain(dom)->integ_term_eq(target, bound) ;

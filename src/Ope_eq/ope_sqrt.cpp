@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_sqrt::Ope_sqrt (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, 
 Ope_sqrt::~Ope_sqrt() {
 }
 
-Term_eq Ope_sqrt::action() const {
+Term_eq Ope_sqrt::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	switch (target.type_data) {

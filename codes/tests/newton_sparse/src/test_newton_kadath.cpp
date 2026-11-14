@@ -219,12 +219,14 @@ void check_skip_clean(System_of_eqs& syst, std::string const& label) {
     for (int k = 1; k <= 24; ++k)
         columns.push_back(static_cast<int>((static_cast<long long>(n - 1) * k) / 24));
     syst.skip_clean_domains = false;
+    syst.prune_zero_derivatives = false;
     syst.sec_member();
     std::vector<Array<double>> reference;
     for (int c : columns)
         reference.push_back(syst.do_col_J(c));
 
     syst.skip_clean_domains = true;
+    syst.prune_zero_derivatives = true;
     syst.sec_member();
     bool same = true;
     std::size_t const m = columns.size();
@@ -239,7 +241,7 @@ void check_skip_clean(System_of_eqs& syst, std::string const& label) {
             syst.sec_member();
         same = same && bitwise_equal(syst.do_col_J(columns[idx]), reference[idx]);
     }
-    check(same, "T3d " + label + ": do_col_J with skipped clean domains bitwise identical (" +
+    check(same, "T3d " + label + ": do_col_J with skipped clean domains and pruned zero derivatives bitwise identical (" +
                     std::to_string(m) + " columns, 3 scrambled passes)");
 }
 

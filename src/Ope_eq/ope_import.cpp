@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -34,7 +35,7 @@ Ope_import::Ope_import (const System_of_eqs* zesys, int dd, int bb, const char* 
 Ope_import::~Ope_import() {
 }
 
-Term_eq Ope_import::action() const {
+Term_eq Ope_import::compute() const {
 
 	Term_eq** res = new Term_eq* [n_ope] ;
 	for (int i=0 ; i<n_ope ; i++)

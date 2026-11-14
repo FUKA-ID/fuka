@@ -366,6 +366,8 @@ Ope_def_global* System_of_eqs::give_def_glob (int which) const {
 
 void System_of_eqs::vars_to_terms () {
 
+	field_generation ++ ;
+
 	for (int d=dom_min ; d<=dom_max ; d++)
 	  espace.get_domain(d)->vars_to_terms() ;
   

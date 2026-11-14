@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_log::Ope_log (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, ta
 Ope_log::~Ope_log() {
 }
 
-Term_eq Ope_log::action() const {
+Term_eq Ope_log::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	switch (target.type_data) {

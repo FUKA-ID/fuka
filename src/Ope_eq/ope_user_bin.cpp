@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -30,7 +31,7 @@ Ope_user_bin::Ope_user_bin (const System_of_eqs* zesys, Term_eq (*zeope) (const 
 Ope_user_bin::~Ope_user_bin() {
 }
 
-Term_eq Ope_user_bin::action() const {
+Term_eq Ope_user_bin::compute() const {
 
 	Term_eq p1 (parts[0]->action()) ;
 	Term_eq p2 (parts[1]->action()) ;

@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -29,7 +30,7 @@ Ope_atanh::Ope_atanh (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys
 Ope_atanh::~Ope_atanh() {
 }
 
-Term_eq Ope_atanh::action() const {
+Term_eq Ope_atanh::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	switch (target.type_data) {

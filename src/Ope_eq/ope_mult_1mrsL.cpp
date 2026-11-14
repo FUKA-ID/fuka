@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_mult_1mrsL::Ope_mult_1mrsL (const System_of_eqs* zesys, Ope_eq* target) : Op
 Ope_mult_1mrsL::~Ope_mult_1mrsL() {
 }
 
-Term_eq Ope_mult_1mrsL::action() const {
+Term_eq Ope_mult_1mrsL::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

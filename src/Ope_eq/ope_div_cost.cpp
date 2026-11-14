@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2019 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_div_cost::Ope_div_cost (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq
 Ope_div_cost::~Ope_div_cost() {
 }
 
-Term_eq Ope_div_cost::action() const {
+Term_eq Ope_div_cost::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

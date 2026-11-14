@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_val_ori::Ope_val_ori (const System_of_eqs* zesys, int dd, Ope_eq* target) :
 Ope_val_ori::~Ope_val_ori() {
 }
 
-Term_eq Ope_val_ori::action() const {
+Term_eq Ope_val_ori::compute() const {
   
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

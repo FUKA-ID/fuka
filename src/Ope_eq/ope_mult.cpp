@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_mult::Ope_mult (const System_of_eqs* zesys, Ope_eq* aa, Ope_eq* bb) : Ope_eq
 Ope_mult::~Ope_mult() {
 }
 
-Term_eq Ope_mult::action() const {
+Term_eq Ope_mult::compute() const {
 
 	return (parts[0]->action() * parts[1]->action()) ;
 }}

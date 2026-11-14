@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_dt::Ope_dt (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, targ
 Ope_dt::~Ope_dt() {
 }
 
-Term_eq Ope_dt::action() const {
+Term_eq Ope_dt::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

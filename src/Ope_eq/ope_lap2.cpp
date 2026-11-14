@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_lap2::Ope_lap2 (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, 
 Ope_lap2::~Ope_lap2() {
 }
 
-Term_eq Ope_lap2::action() const {
+Term_eq Ope_lap2::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	int mm ;

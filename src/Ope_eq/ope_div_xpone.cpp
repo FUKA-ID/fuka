@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_div_xpone::Ope_div_xpone (const System_of_eqs* zesys, Ope_eq* target) : Ope_
 Ope_div_xpone::~Ope_div_xpone() {
 }
 
-Term_eq Ope_div_xpone::action() const {
+Term_eq Ope_div_xpone::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 

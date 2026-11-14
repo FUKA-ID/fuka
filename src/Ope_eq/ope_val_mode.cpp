@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_val_mode::Ope_val_mode (const System_of_eqs* zesys, const Index &pp, double 
 Ope_val_mode::~Ope_val_mode() {
 }
 
-Term_eq Ope_val_mode::action() const {
+Term_eq Ope_val_mode::compute() const {
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor
 	if (target.type_data != TERM_T) {

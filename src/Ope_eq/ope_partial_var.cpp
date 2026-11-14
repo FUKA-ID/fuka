@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_partial_var::Ope_partial_var (const System_of_eqs* zesys, int which, Ope_eq*
 Ope_partial_var::~Ope_partial_var() {
 }
 
-Term_eq Ope_partial_var::action() const {
+Term_eq Ope_partial_var::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor

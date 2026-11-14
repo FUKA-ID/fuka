@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_dtime::Ope_dtime (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys
 Ope_dtime::~Ope_dtime() {
 }
 
-Term_eq Ope_dtime::action() const {
+Term_eq Ope_dtime::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	int valence = target.val_t->get_valence() ;

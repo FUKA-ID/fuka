@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_inverse::Ope_inverse (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(z
 Ope_inverse::~Ope_inverse() {
 }
 
-Term_eq Ope_inverse::action() const {
+Term_eq Ope_inverse::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	

@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -29,7 +30,7 @@ Ope_sin::Ope_sin (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, ta
 Ope_sin::~Ope_sin() {
 }
 
-Term_eq Ope_sin::action() const {
+Term_eq Ope_sin::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	switch (target.type_data) {

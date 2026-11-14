@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,7 +29,7 @@ Ope_int_volume::Ope_int_volume (const System_of_eqs* zesys, Ope_eq* target) : Op
 Ope_int_volume::~Ope_int_volume() {
 }
 
-Term_eq Ope_int_volume::action() const {
+Term_eq Ope_int_volume::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	if (target.get_type_data()==TERM_T) 

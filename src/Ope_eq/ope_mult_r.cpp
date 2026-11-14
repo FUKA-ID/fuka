@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_mult_r::Ope_mult_r (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zes
 Ope_mult_r::~Ope_mult_r() {
 }
 
-Term_eq Ope_mult_r::action() const {
+Term_eq Ope_mult_r::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	return target.val_t->get_space().get_domain(dom)->mult_r_term_eq(target) ;

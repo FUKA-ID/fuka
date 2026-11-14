@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_pow::Ope_pow (const System_of_eqs*zesys, int nn, Ope_eq* target) : Ope_eq(ze
 Ope_pow::~Ope_pow() {
 }
 
-Term_eq Ope_pow::action() const {
+Term_eq Ope_pow::compute() const {
 	if (power==0) 
 		return Term_eq (dom, 1., 0.) ;
 	else {

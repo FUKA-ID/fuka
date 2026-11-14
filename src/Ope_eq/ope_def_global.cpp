@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -41,7 +42,7 @@ Ope_def_global::~Ope_def_global() {
 	delete [] auxi ;
 }
 
-Term_eq Ope_def_global::action() const {
+Term_eq Ope_def_global::compute() const {
 	/*if (!called) {
 		res = new Term_eq(parts[0]->action()) ;
 		called = true ;

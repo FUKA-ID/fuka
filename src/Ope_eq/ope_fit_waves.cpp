@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -102,7 +103,7 @@ Ope_fit_waves::Ope_fit_waves (const System_of_eqs* zesys, Ope_eq* target, Ope_eq
 Ope_fit_waves::~Ope_fit_waves() {
 }
 
-Term_eq Ope_fit_waves::action() const {
+Term_eq Ope_fit_waves::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	Term_eq omega (parts[1]->action()) ;

@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -28,6 +29,6 @@ Ope_sub::Ope_sub (const System_of_eqs* zesys, Ope_eq* aa, Ope_eq* bb) : Ope_eq(z
 Ope_sub::~Ope_sub() {
 }
 
-Term_eq Ope_sub::action() const {
+Term_eq Ope_sub::compute() const {
 	return parts[0]->action() - parts[1]->action() ;
 }}

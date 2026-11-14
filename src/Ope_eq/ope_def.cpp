@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -57,7 +58,7 @@ Ope_def::~Ope_def() {
 	delete res ;
 }
 
-Term_eq Ope_def::action() const {
+Term_eq Ope_def::compute() const {
 	
 	/*if (!called) {
 		res = new Term_eq(parts[0]->action()) ;

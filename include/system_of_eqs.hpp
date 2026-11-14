@@ -135,6 +135,15 @@ class System_of_eqs {
 	/// previous one, instead of in every domain (same results). Requires sec_member() after any change of the
 	/// fields or constants, as every Newton driver does. Not used with global definitions.
 	bool skip_clean_domains = true ;
+	/// do_col_J does not recompute operator subtrees whose derivative is zero in the column; their result is
+	/// cached per operator (Ope_eq::action) until the fields change (vars_to_terms). Same results.
+	bool prune_zero_derivatives = true ;
+	bool prune_active = false ; ///< Pruning is on (inside do_col_J only).
+	int prune_skip_dom[2] = {-1, -1} ; ///< Domains without pruning in this column (moving variable domains).
+	long column_stamp = 0 ; ///< Incremented by every do_col_J (validity of Ope_eq::der_is_zero).
+	long field_generation = 0 ; ///< Incremented when the fields are copied to the terms (cache validity).
+	/// @return true if the metric is flat (its derivative is always zero).
+	bool has_flat_metric () const ;
 	/// Wall time spent in the phases of do_col_J / do_JX, accumulated while \c profile_phases is set.
 	struct Phase_times {
 		double setup = 0. ; ///< Derivatives of the unknowns (terms, variable domains).

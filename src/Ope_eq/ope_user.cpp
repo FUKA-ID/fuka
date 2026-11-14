@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -30,7 +31,7 @@ Ope_user::Ope_user (const System_of_eqs* zesys, Term_eq (*zeope) (const Term_eq&
 Ope_user::~Ope_user() {
 }
 
-Term_eq Ope_user::action() const {
+Term_eq Ope_user::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	return pope(target, par) ;

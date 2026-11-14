@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2019 Philippe Grandclement
 
@@ -29,7 +30,7 @@ Ope_sinh::Ope_sinh (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys, 
 Ope_sinh::~Ope_sinh() {
 }
 
-Term_eq Ope_sinh::action() const {
+Term_eq Ope_sinh::compute() const {
 
 	Term_eq target (parts[0]->action()) ;
 	switch (target.type_data) {

@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_partial::Ope_partial (const System_of_eqs* zesys, char ind, Ope_eq* target) 
 Ope_partial::~Ope_partial() {
 }
 
-Term_eq Ope_partial::action() const {
+Term_eq Ope_partial::compute() const {
 	Term_eq target (parts[0]->action()) ;
 	// Check it is a tensor
 	if (target.type_data != TERM_T) {

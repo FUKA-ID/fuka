@@ -1,3 +1,4 @@
+// clang-format off
 /*
     Copyright 2017 Philippe Grandclement
 
@@ -27,7 +28,7 @@ Ope_minus::Ope_minus (const System_of_eqs* zesys, Ope_eq* target) : Ope_eq(zesys
 Ope_minus::~Ope_minus() {
 }
 
-Term_eq Ope_minus::action() const {
+Term_eq Ope_minus::compute() const {
 	return -parts[0]->action() ;
 }
 }
