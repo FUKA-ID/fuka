@@ -58,6 +58,8 @@ else(PAR_VERSION)
 	file(COPY $ENV{HOME_KADATH}/src_seq/do_newton.cpp DESTINATION $ENV{HOME_KADATH}/src/System_of_eqs/)
 endif(PAR_VERSION)
 
+include($ENV{HOME_KADATH}/Cmake/MUMPS.cmake)
+
 #Get all the src files
 file(GLOB_RECURSE KADATH_SOURCES $ENV{HOME_KADATH}/src/*.cpp )
 #message ("Source files" : ${KADATH_SOURCES})

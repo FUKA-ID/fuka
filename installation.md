@@ -31,6 +31,23 @@ the installation directory in order for FUKA's `cmake` build scripts to
 find it.  Finally, `-DGRHAYL_EOS=ON` needs to be added to all cmake
 commands to ensure `GRHayL` support is active at build time.
 
+#### Optional: MUMPS sparse Newton solver
+With [MUMPS](https://mumps-solver.org) (5.x, built with the same MPI and ScaLAPACK as FUKA), the
+parallel Newton-Raphson step stores the Jacobian as a sparse matrix and factors it with MUMPS instead of
+the dense ScaLAPACK solve, so the linear-solve memory scales with the number of nonzeros instead of n².
+Set `MUMPS_ROOT` (and `METIS_ROOT` / `PARMETIS_ROOT` if MUMPS uses them) before running `cmake`; the build
+detects it automatically (`-DMUMPS=OFF` disables it). Without `MUMPS_ROOT` nothing changes. With spack, e.g.
+
+```
+spack add 'mumps@5.8.1 +double ~complex ~float +metis +parmetis +openmp ~int64 ^<your mpi> ^<your scalapack/mkl>'
+export MUMPS_ROOT=$(spack location -i mumps) METIS_ROOT=$(spack location -i metis) PARMETIS_ROOT=$(spack location -i parmetis)
+```
+
+Pin MPI and MKL/ScaLAPACK to the installations FUKA already uses. If MUMPS links threaded MKL, the build
+switches FUKA to `mkl_gnu_thread` as well, so run with `OMP_NUM_THREADS=1`. At run time
+`KADATH_LINSOLVE=scalapack` selects the dense solver again; see `codes/tests/newton_sparse/README.md`
+for all switches and the tests.
+
 # 2. Repository sync
 
 One can contain the latest version of FUKA using git using the following:

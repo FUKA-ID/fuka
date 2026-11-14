@@ -77,6 +77,8 @@ if (PAR_VERSION)
 	endif(MKL_VERSION)
 endif(PAR_VERSION)
 
+include($ENV{HOME_KADATH}/Cmake/MUMPS.cmake)
+
 if(NOT PAR_VERSION)
 #    if (NOT DEFINED PGPLOT_LIBRARIES)
 #	    find_package(PGPLOT REQUIRED) #pgplot probably only used in sequential mode
