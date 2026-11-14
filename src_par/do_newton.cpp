@@ -908,6 +908,8 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	[[maybe_unused]] NewtonBackend const backend =
 	    (solver == System_of_eqs::GAUSS_NEWTON) ? NewtonBackend::SCALAPACK : newton_backend_from_env();
+	// KADATH_JACOBIAN_SKIP_CLEAN=0: do_col_J recomputes definitions and metric in every domain (old behaviour).
+	syst.skip_clean_domains = env_on_root("KADATH_JACOBIAN_SKIP_CLEAN", "1") == "1";
 
 	Array<double> X (syst.get_nbr_unknowns());
 #ifdef KADATH_USE_MUMPS

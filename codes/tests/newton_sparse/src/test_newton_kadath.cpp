@@ -11,6 +11,7 @@
  *  T3  do_col_J is deterministic (bitwise identical when recomputed, and on every rank); reports nnz fraction
  *  T3b the matrix-free do_JX(e_j) equals do_col_J(j), for the number unknown (lam) and field columns, after
  *      do_col_J calls that leave other derivative state behind; with lam in the last domain too
+ *  T3d do_col_J skipping definitions/metric of untouched domains is bitwise identical to recomputing all
  *  T3c the same with variable domains (shape unknowns): Space_spheric_adapted (adapted shells, Galerkin
  *      shape coefficients) and Space_adapted_bh (homothetic shells, as in the BH solver)
  *  T4a one Newton update: MUMPS (centralized and distributed input) vs ScaLAPACK, relative difference < 1e-10
@@ -207,6 +208,41 @@ void test_jacobian_columns() {
               sci(100. * nnz / (1. * n * n)) + " % of dense)");
 }
 
+/// T3d: do_col_J with skip_clean_domains (definitions and metric recomputed only in touched domains) must be
+/// bitwise identical to recomputing everything, for columns visited in a scrambled order with do_JX and
+/// sec_member calls in between (they invalidate the tracked state).
+void check_skip_clean(System_of_eqs& syst, std::string const& label) {
+    int const n = syst.get_nbr_unknowns();
+    std::vector<int> columns;
+    for (int c = 0; c < std::min(n, 4); ++c)
+        columns.push_back(c);
+    for (int k = 1; k <= 24; ++k)
+        columns.push_back(static_cast<int>((static_cast<long long>(n - 1) * k) / 24));
+    syst.skip_clean_domains = false;
+    syst.sec_member();
+    std::vector<Array<double>> reference;
+    for (int c : columns)
+        reference.push_back(syst.do_col_J(c));
+
+    syst.skip_clean_domains = true;
+    syst.sec_member();
+    bool same = true;
+    std::size_t const m = columns.size();
+    for (std::size_t k = 0; k < 3 * m; ++k) {
+        std::size_t const idx = (k * 7 + 3) % m;  // 7 is coprime with m = 28: every column, scrambled, 3 times
+        if (k == m) {
+            Array<double> e(n);
+            e = 1.;
+            syst.do_JX(e);
+        }
+        if (k == 2 * m)
+            syst.sec_member();
+        same = same && bitwise_equal(syst.do_col_J(columns[idx]), reference[idx]);
+    }
+    check(same, "T3d " + label + ": do_col_J with skipped clean domains bitwise identical (" +
+                    std::to_string(m) + " columns, 3 scrambled passes)");
+}
+
 /// T3b: J e_j from do_JX must equal the assembled column j (Newton-Krylov relies on it), whatever the previous
 /// do_col_J left in the Term_eq derivatives (column 0 is lam: no variable domains, the number comes first).
 void test_jx_columns(bool lam_outer) {
@@ -233,6 +269,7 @@ void test_jx_columns(bool lam_outer) {
                       << ") differs from do_col_J(" << probe << "): " << sci(d) << std::endl;
     }
     check(worst <= 1e-13, t + " do_JX(e_j) equals do_col_J(j): max rel. diff = " + sci(worst));
+    check_skip_clean(syst, lam_outer ? "spheric, lam in last domain" : "spheric");
 }
 
 /// T3c: do_JX(e_j) == do_col_J(j) when domains 1 and 2 have shape unknowns (the first columns). The field is
@@ -301,6 +338,7 @@ void test_jx_variable_domains(std::string const& label) {
     check(nvd > 0 && worst <= 1e-12 && combo <= 1e-12,
           "T3c " + label + ": " + std::to_string(nvd) + " shape unknowns, do_JX(e_j) vs do_col_J(j) max rel. diff = " +
               sci(worst) + " (column " + std::to_string(worst_col) + "), shape combination " + sci(combo));
+    check_skip_clean(syst, label);
 }
 
 void test_single_update() {

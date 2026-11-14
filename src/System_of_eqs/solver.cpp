@@ -50,6 +50,8 @@ Array<double> System_of_eqs::check_equations() {
 
 Array<double> System_of_eqs::sec_member() {
 
+	der_clean.clear() ;
+
 	vars_to_terms() ;
 
 	if (met!=0x0)
@@ -105,6 +107,7 @@ void System_of_eqs::find_variable_domains() {
 
 Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 
+	der_clean.clear() ;
 	find_variable_domains() ;
 	xx_to_ders(xx) ;
 	// As in do_col_J (update_terms_from_variable_domains): in a variable domain the collocation points move with
@@ -206,15 +209,35 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 		term[i]->set_der_t(auxi + term[i]->get_der_t()) ;
 	}
 	
-	// Delete the metric derivative terms :
-	if (met!=0x0)  
+	// Metric quantities and definitions: only where they can have changed. In a domain not touched by
+	// this column every term has a zero derivative, so they keep their values with a zero derivative; if
+	// that is what they already hold (der_clean) there is nothing to recompute.
+	auto active = [&](int d) {
+		return is_var_double || (d==zedom) || (d==zedoms(0)) || (d==zedoms(1)) ;
+	} ;
+	bool const track = skip_clean_domains && (ndef_glob==0) ;
+	bool const skip = track && (static_cast<int>(der_clean.size())==ndom) ;
+	auto todo = [&](int d) {
+		return !skip || (d<dom_min) || (d>dom_max) || active(d) || !der_clean[d-dom_min] ;
+	} ;
+	if (met!=0x0)
 	  for (int d=dom_min ; d<=dom_max ; d++)
-		met->update(d) ;
-	  
-	// Delete the definitions 
+		if (todo(d))
+			met->update(d) ;
+
 	for (int i=0 ; i<ndef ; i++)
-		def[i]->compute_res() ;
-	
+		if (todo(def[i]->get_dom()))
+			def[i]->compute_res() ;
+
+	if (track) {
+		der_clean.assign(ndom, 1) ;
+		for (int d=dom_min ; d<=dom_max ; d++)
+			if (active(d))
+				der_clean[d-dom_min] = 0 ;
+	}
+	else
+		der_clean.clear() ;
+
 	conte = 0 ;
 	for (int i=0 ; i<neq ; i++) {
 		if ((is_var_double) || (eq[i]->take_into_account(zedom)) || (eq[i]->take_into_account(zedoms(0))) || (eq[i]->take_into_account(zedoms(1)))) {

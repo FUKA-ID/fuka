@@ -126,6 +126,16 @@ class System_of_eqs {
 	static unsigned long next_instance_id() {static unsigned long counter = 0 ; return ++counter ;}
 	std::vector<int> variable_domains ; ///< Domains whose shape is an unknown (see \c find_variable_domains).
 	bool variable_domains_known = false ; ///< \c variable_domains has been determined.
+	/// Per domain (index d - dom_min): the definitions and metric quantities hold current values and a zero
+	/// derivative. Empty = unknown (everything is recomputed). Maintained by do_col_J; cleared by sec_member
+	/// and do_JX.
+	std::vector<char> der_clean ;
+    public:
+	/// do_col_J recomputes the definitions and the metric only in the domains touched by the column or by the
+	/// previous one, instead of in every domain (same results). Requires sec_member() after any change of the
+	/// fields or constants, as every Newton driver does. Not used with global definitions.
+	bool skip_clean_domains = true ;
+    protected:
 
   std::vector<std::tuple<std::string, int, int>> eq_list; ///< List of all equations through all domains, to match indices to expressions.
   std::vector<std::tuple<std::string, int, int>> eq_int_list; ///< List of all integral equations through all domains, to match indices to expressions.
