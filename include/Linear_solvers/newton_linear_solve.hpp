@@ -45,6 +45,8 @@ struct NewtonKrylovStats {
         0;  ///< Exact sparse Newton steps (new preconditioner).
     int gmres_failures =
         0;  ///< GMRES runs that missed the forcing term and caused a refactorization.
+    int trial_successes =
+        0;  ///< KADATH_KRYLOV_REFRESH=lazy: refactorizations avoided by a successful GMRES trial.
 };
 
 /// Newton step with GMRES (J v from do_JX) preconditioned by kept MUMPS factors, refactoring when needed;

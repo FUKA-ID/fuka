@@ -37,6 +37,53 @@ inline void append_column(Array<double> const& column,
     }
 }
 
+/// Largest |value| per row and per column (0-based, length n) of the local entries; the caller reduces the
+/// row maxima across ranks (columns are never split across ranks).
+inline void local_row_column_max(SparseTriplets const& triplets,
+                                 int n,
+                                 std::vector<double>& row_max,
+                                 std::vector<double>& col_max) {
+    row_max.assign(n, 0.);
+    col_max.assign(n, 0.);
+    for (std::int64_t k = 0; k < triplets.size(); ++k) {
+        double const a = triplets.values[k] < 0. ? -triplets.values[k]
+                                                 : triplets.values[k];
+        double& r = row_max[triplets.rows[k] - 1];
+        double& c = col_max[triplets.cols[k] - 1];
+        r = std::max(r, a);
+        c = std::max(c, a);
+    }
+}
+
+/// Removes entries negligible in both directions: |a_ij| <= tolerance * max_k |a_ik| and
+/// |a_ij| <= tolerance * max_k |a_kj|. Only for preconditioners: the matrix changes.
+/// @return number of entries removed.
+inline std::int64_t drop_negligible(SparseTriplets& triplets,
+                                    std::vector<double> const& row_max,
+                                    std::vector<double> const& col_max,
+                                    double tolerance) {
+    std::int64_t kept = 0;
+    std::int64_t const total = triplets.size();
+    for (std::int64_t k = 0; k < total; ++k) {
+        double const a = triplets.values[k] < 0. ? -triplets.values[k]
+                                                 : triplets.values[k];
+        if (a <= tolerance * row_max[triplets.rows[k] - 1] &&
+            a <= tolerance * col_max[triplets.cols[k] - 1])
+            continue;
+        triplets.rows[kept] = triplets.rows[k];
+        triplets.cols[kept] = triplets.cols[k];
+        triplets.values[kept] = triplets.values[k];
+        ++kept;
+    }
+    triplets.rows.resize(kept);
+    triplets.cols.resize(kept);
+    triplets.values.resize(kept);
+    triplets.rows.shrink_to_fit();
+    triplets.cols.shrink_to_fit();
+    triplets.values.shrink_to_fit();
+    return total - kept;
+}
+
 /// Block size of the 1-D column distribution of the Newton Jacobian (same rule as the ScaLAPACK path).
 /// @param m number of rows, @param nproc number of ranks; the result is at least 1.
 inline int newton_block_size(int m, int nproc) {

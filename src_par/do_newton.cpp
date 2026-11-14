@@ -464,8 +464,11 @@ namespace {
 
 /// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
 /// successful solver (with its factors) is returned in @p solver. Collective. @return 0 or the last status.
+/// @param drop_tolerance > 0 removes entries negligible relative to both their row and column maximum before
+/// factoring (drop_negligible): the factors and x then belong to a perturbed matrix, so only preconditioners
+/// may use it.
 int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::vector<double>& x,
-                       std::unique_ptr<MumpsSolver>& solver) {
+                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.) {
 	int rank, nproc;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
@@ -481,6 +484,18 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		append_column(syst.do_col_J(col), col, local);
 	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
 	dump_jacobian_pattern(n, local);
+	if (drop_tolerance > 0.) {
+		std::vector<double> row_max, col_max;
+		local_row_column_max(local, n, row_max, col_max);
+		MPI_Allreduce(MPI_IN_PLACE, row_max.data(), n, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+		long long counts[2] = {static_cast<long long>(local.size()), 0};
+		counts[1] = drop_negligible(local, row_max, col_max, drop_tolerance);
+		MPI_Allreduce(MPI_IN_PLACE, counts, 2, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+		if (rank == 0)
+			std::cout << "Preconditioner: dropped " << counts[1] << " of " << counts[0] << " entries ("
+			          << 100. * counts[1] / std::max(1LL, counts[0]) << " %) at relative tolerance " << drop_tolerance
+			          << std::endl;
+	}
 
 	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
 	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(MumpsOptions::from_env());
@@ -563,7 +578,7 @@ namespace {
 
 /// Preconditioner and history kept between Newton-Krylov steps of one system.
 struct KrylovState {
-	System_of_eqs const* syst = nullptr;
+	unsigned long syst_id = 0;     ///< System_of_eqs::get_instance_id() of the factored system (0: none).
 	int n = 0;
 	std::unique_ptr<MumpsSolver> preconditioner;
 	int age = 0;                   ///< Newton steps since the preconditioner was factored.
@@ -593,8 +608,10 @@ KrylovState& krylov_state() {
 	return state;
 }
 
+/// std::to_string would print fallback with 6 decimals (1e-10 -> "0.000000"): parse the variable only when set.
 double env_double_on_root(char const* name, double fallback) {
-	return std::stod(env_on_root(name, std::to_string(fallback)));
+	std::string const value = env_on_root(name, "");
+	return value.empty() ? fallback : std::stod(value);
 }
 
 }  // namespace
@@ -610,10 +627,14 @@ void reset_newton_krylov() {
 /// Newton-Krylov after arXiv:2608.07653: GMRES with the matrix-free J v = do_JX(v), right-preconditioned by the
 /// MUMPS factors of an earlier Jacobian; Eisenstat-Walker forcing (choice 2, Eisenstat & Walker, SIAM J. Sci.
 /// Comput. 17, 16 (1996), eq. 2.6 with gamma = 0.9, alpha = 2, safeguard 3.4) bounded to [eta_min, eta_max].
-/// The preconditioner is refactored (an exact sparse Newton step) when absent, when n or the system changed,
+/// The preconditioner is refactored (an exact sparse Newton step) when absent, when n or the system (instance id) changed,
 /// when ||F|| grew, when it is older than KADATH_KRYLOV_MAX_AGE steps (0 = unlimited), or when GMRES does not
 /// converge within KADATH_KRYLOV_MAX_ITERATIONS. The fields only change after this returns, so a failed GMRES
-/// leaves the system untouched for the exact step.
+/// leaves the system untouched for the exact step. KADATH_KRYLOV_REFRESH=lazy tries GMRES with the kept
+/// factors before each of these refactorizations except age (see below).
+/// KADATH_KRYLOV_DROP > 0 factors the Jacobian without entries negligible in their row and column; the exact
+/// step is then solved by GMRES with the true J v to KADATH_KRYLOV_EXACT_TOL (1e-10), and refactored without
+/// dropping if that fails.
 Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& second) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
@@ -630,50 +651,70 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	int const max_age = std::stoi(env_on_root("KADATH_KRYLOV_MAX_AGE", "0"));
 	double const eta_min = env_double_on_root("KADATH_KRYLOV_ETA_MIN", 1e-8);
 	double const eta_max = env_double_on_root("KADATH_KRYLOV_ETA_MAX", 1e-3);
+	double const drop = env_double_on_root("KADATH_KRYLOV_DROP", 0.);
+	double const exact_tolerance = env_double_on_root("KADATH_KRYLOV_EXACT_TOL", 1e-10);
+	bool const lazy = env_on_root("KADATH_KRYLOV_REFRESH", "classic") == "lazy";
+	int const trial_iterations = std::stoi(env_on_root("KADATH_KRYLOV_TRIAL_ITERATIONS", "16"));
 
-	char const* reason = nullptr;  // why this step refactors (nullptr: try GMRES)
+	auto apply_j = [&syst, n](std::vector<double> const& v, std::vector<double>& w) {
+		Array<double> av (n);
+		for (int i = 0; i < n; ++i)
+			av.set(i) = v[i];
+		Array<double> const jv (syst.do_JX(av));
+		w.assign(jv.get_data(), jv.get_data() + n);
+		MPI_Bcast(w.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);  // every rank continues with identical data
+	};
+	int preconditioner_status = 0;
+	auto apply_m = [&st, &preconditioner_status](std::vector<double> const& v, std::vector<double>& z) {
+		z = v;
+		int const s = st.preconditioner->solve_factored(z);
+		if (s != 0)
+			preconditioner_status = s;
+	};
+	std::vector<double> const b (second.get_data(), second.get_data() + n);
+
+	std::string reason;  // why this step refactors (empty: GMRES with the kept preconditioner)
+	bool usable = st.preconditioner && st.preconditioner->has_factors() && st.n == n;  // can precondition J
 	if (!st.preconditioner || !st.preconditioner->has_factors())
 		reason = "no preconditioner";
-	else if (st.syst != &syst || st.n != n)
-		reason = "new system or resolution";
+	else if (st.n != n)
+		reason = "new resolution";
+	else if (st.syst_id != syst.get_instance_id())
+		reason = "new system";
 	else if (st.previous_norm > 0. && norm > st.previous_norm)
 		reason = "residual grew";
-	else if (max_age > 0 && st.age >= max_age)
+	else if (max_age > 0 && st.age >= max_age) {
 		reason = "preconditioner too old";
-	bool const refresh = reason != nullptr;
+		usable = false;
+	}
+	// KADATH_KRYLOV_REFRESH=lazy: where the classic policy refactors although the kept factors still fit the
+	// matrix size, first try GMRES with them (at most KADATH_KRYLOV_TRIAL_ITERATIONS); refactor if that fails.
+	// The step still meets its forcing term with the true J v, so only the cost can change, not the accuracy.
+	int trial = (lazy && usable && !reason.empty()) ? 1 : 0;
+	MPI_Bcast(&trial, 1, MPI_INT, 0, MPI_COMM_WORLD);  // every rank takes the same (collective) branch
 	std::vector<double> x;
 
-	if (!refresh) {
+	if (reason.empty() || trial) {
 		double const gamma = 0.9, alpha = 2.;
-		double eta = gamma * std::pow(norm / st.previous_norm, alpha);
-		if (st.previous_eta > 0. && gamma * std::pow(st.previous_eta, alpha) > 0.1)
-			eta = std::max(eta, gamma * std::pow(st.previous_eta, alpha));
-		eta = std::min(eta_max, std::max(eta_min, eta));
-
-		auto apply_j = [&syst, n](std::vector<double> const& v, std::vector<double>& w) {
-			Array<double> av (n);
-			for (int i = 0; i < n; ++i)
-				av.set(i) = v[i];
-			Array<double> const jv (syst.do_JX(av));
-			w.assign(jv.get_data(), jv.get_data() + n);
-			MPI_Bcast(w.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);  // every rank continues with identical data
-		};
-		int preconditioner_status = 0;
-		auto apply_m = [&st, &preconditioner_status](std::vector<double> const& v, std::vector<double>& z) {
-			z = v;
-			int const s = st.preconditioner->solve_factored(z);
-			if (s != 0)
-				preconditioner_status = s;
-		};
-		std::vector<double> const b (second.get_data(), second.get_data() + n);
+		double eta = eta_max;  // a trial step has no meaningful previous residual of this linearization
+		if (!trial) {
+			eta = gamma * std::pow(norm / st.previous_norm, alpha);
+			if (st.previous_eta > 0. && gamma * std::pow(st.previous_eta, alpha) > 0.1)
+				eta = std::max(eta, gamma * std::pow(st.previous_eta, alpha));
+			eta = std::min(eta_max, std::max(eta_min, eta));
+		}
 
 		auto begin = std::chrono::system_clock::now();
-		GmresResult const result = gmres(apply_j, apply_m, b, x, eta, max_iterations);
+		GmresResult const result =
+		    gmres(apply_j, apply_m, b, x, eta, trial ? std::min(trial_iterations, max_iterations) : max_iterations);
 		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		double const t = elapsed_time(begin);
 
 		if (result.converged && preconditioner_status == 0) {
 			++st.age;
+			st.syst_id = syst.get_instance_id();
+			if (trial)
+				++st.stats.trial_successes;
 			st.previous_norm = norm;
 			st.previous_eta = eta;
 			++st.stats.krylov_steps;
@@ -681,14 +722,16 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 			if (rank == 0)
 				std::cout << "Newton-Krylov: GMRES " << result.iterations << " iterations, relative residual "
 				          << result.relative_residual << " <= forcing term " << eta << ", preconditioner age "
-				          << st.age << ", " << t << " seconds" << std::endl;
+				          << st.age << ", " << t << " seconds"
+				          << (trial ? " (trial with kept preconditioner instead of refactoring: " + reason + ")" : "")
+				          << std::endl;
 			Array<double> X (n);
 			for (int i = 0; i < n; ++i)
 				X.set(i) = x[i];
 			return X;
 		}
 		++st.stats.gmres_failures;
-		reason = "GMRES missed the forcing term";
+		reason = trial ? reason + ", GMRES trial failed" : "GMRES missed the forcing term";
 		if (rank == 0)
 			std::cout << "Newton-Krylov: GMRES did not reach " << eta << " in " << result.iterations
 			          << " iterations (relative residual " << result.relative_residual << ", preconditioner status "
@@ -699,7 +742,28 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ", ||F|| = " << norm
 		          << ", previous " << st.previous_norm << ")" << std::endl;
 	st.preconditioner.reset();
-	int const status = sparse_newton_step(syst, second, x, st.preconditioner);
+	int status = sparse_newton_step(syst, second, x, st.preconditioner, drop);
+	if (status == 0 && drop > 0.) {
+		// The factors belong to the dropped matrix: solve with the true J v, preconditioned by them.
+		preconditioner_status = 0;
+		auto begin = std::chrono::system_clock::now();
+		GmresResult const result = gmres(apply_j, apply_m, b, x, exact_tolerance, max_iterations);
+		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		if (result.converged && preconditioner_status == 0) {
+			st.stats.krylov_iterations += result.iterations;
+			if (rank == 0)
+				std::cout << "Newton-Krylov: exact step finished by GMRES, " << result.iterations
+				          << " iterations, relative residual " << result.relative_residual << ", "
+				          << elapsed_time(begin) << " seconds" << std::endl;
+		} else {
+			if (rank == 0)
+				std::cout << "Newton-Krylov: GMRES with the dropped preconditioner did not reach " << exact_tolerance
+				          << " (relative residual " << result.relative_residual << ", preconditioner status "
+				          << preconditioner_status << "); refactoring without dropping" << std::endl;
+			st.preconditioner.reset();
+			status = sparse_newton_step(syst, second, x, st.preconditioner);
+		}
+	}
 	if (status != 0) {
 		st = KrylovState{};
 		if (env_on_root("KADATH_MUMPS_FALLBACK", "abort") != "scalapack") {
@@ -714,7 +778,7 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 			          << "); this Newton step falls back to the dense ScaLAPACK solver" << std::endl;
 		return newton_update_scalapack(syst, second, System_of_eqs::NEWTON_RAPHSON);
 	}
-	st.syst = &syst;
+	st.syst_id = syst.get_instance_id();
 	st.n = n;
 	st.age = 0;
 	st.previous_norm = norm;
@@ -796,6 +860,45 @@ void profile_newton_operators(System_of_eqs& syst, Array<double> const& second, 
 		          << " s (= " << t_jx / t_col << " columns), max|J dx - second| / max|second| = "
 		          << (ref > 0. ? diff / ref : diff) << ", sec_member (values only, all domains) = " << t_res << " s"
 		          << std::endl;
+
+	// do_JX(e_j) against the assembled column j, each after a do_col_J of another column (stale derivative
+	// state): the first columns are the number unknowns (no variable domains), then evenly spaced columns.
+	std::vector<int> columns = {0, 1, 2};
+	int const spaced = std::stoi(env_on_root("KADATH_NEWTON_PROFILE_COLUMNS", "24"));
+	for (int k = 1; k <= spaced; ++k)
+		columns.push_back(static_cast<int>((static_cast<long long>(n - 1) * k) / spaced));
+	double worst = 0.;
+	int worst_col = -1;
+	for (std::size_t k = 0; k < columns.size(); ++k) {
+		int const col = std::min(columns[k], n - 1);
+		syst.do_col_J(columns[(k + 1) % columns.size()] % n);
+		Array<double> e (n);
+		e = 0.;
+		e.set(col) = 1.;
+		Array<double> const jv (syst.do_JX(e));
+		Array<double> const jc (syst.do_col_J(col));
+		double d = 0., r = 0.;
+		int row = -1;
+		for (int i = 0; i < jc.get_size(0); ++i) {
+			if (std::fabs(jv(i) - jc(i)) > d) {
+				d = std::fabs(jv(i) - jc(i));
+				row = i;
+			}
+			r = std::max(r, std::fabs(jc(i)));
+		}
+		double const rel = r > 0. ? d / r : d;
+		if (rank == 0 && rel > 1e-12)
+			std::cout << "Profile: do_JX(e_" << col << ") differs from do_col_J(" << col << "): max|diff| = " << d
+			          << " at row " << row << " (do_col_J " << jc(row) << ", do_JX " << jv(row) << "), relative "
+			          << rel << std::endl;
+		if (rel > worst) {
+			worst = rel;
+			worst_col = col;
+		}
+	}
+	if (rank == 0)
+		std::cout << "Profile: do_JX(e_j) vs do_col_J(j) over " << columns.size() << " columns: worst relative "
+		          << worst << " (column " << worst_col << ")" << std::endl;
 }
 
 }  // namespace

@@ -4,6 +4,7 @@
  *  - block_cyclic_columns matches ScaLAPACK numroc/indxl2g on a 1 x nproc grid and partitions 0..n-1,
  *    for the ScaLAPACK-path block size and for the round-robin (1) and odd (3) block sizes
  *  - append_column drops exact zeros only, uses 1-based indices and round-trips to the dense column
+ *  - drop_negligible removes only entries small relative to both their row and column maximum
  *
  * Serial; returns 0 if all checks pass.
  */
@@ -149,12 +150,46 @@ void test_append_column() {
                       std::to_string(i));
 }
 
+void test_drop_negligible() {
+    // 3 x 3, columns 0..2. Row 2 is tiny overall (scale 1e-20): its entries are small in their columns
+    // but not in their row, so they must stay. a(0,1) = 1e-15 is negligible in row 0 and column 1.
+    SparseTriplets t;
+    auto add = [&t](int i, int j, double v) {
+        t.rows.push_back(i + 1);
+        t.cols.push_back(j + 1);
+        t.values.push_back(v);
+    };
+    add(0, 0, 1.);
+    add(0, 1, -1e-15);
+    add(1, 1, 2.);
+    add(1, 2, 3.);
+    add(2, 0, 1e-20);
+    add(2, 2, -2e-20);
+    std::vector<double> row_max, col_max;
+    local_row_column_max(t, 3, row_max, col_max);
+    check(row_max[0] == 1. && row_max[2] == 2e-20 && col_max[2] == 3.,
+          "row and column maxima");
+    std::int64_t const removed = drop_negligible(t, row_max, col_max, 1e-13);
+    check(removed == 1 && t.size() == 5, "exactly one negligible entry removed");
+    bool kept_small_row = false, removed_target = true;
+    for (std::int64_t k = 0; k < t.size(); ++k) {
+        if (t.rows[k] == 3 && t.cols[k] == 1 && t.values[k] == 1e-20)
+            kept_small_row = true;
+        if (t.rows[k] == 1 && t.cols[k] == 2)
+            removed_target = false;
+    }
+    check(kept_small_row, "entries of a small-scale row are kept");
+    check(removed_target, "entry negligible in row and column removed");
+    check(drop_negligible(t, row_max, col_max, 0.) == 0, "tolerance 0 keeps everything");
+}
+
 }  // namespace
 
 int main() {
     test_block_size();
     test_column_distribution();
     test_append_column();
+    test_drop_negligible();
     std::cout << (failures == 0 ? "test_sparse_triplets: PASS"
                                 : "test_sparse_triplets: FAIL")
               << " (" << failures << " failures)" << std::endl;
