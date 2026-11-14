@@ -131,37 +131,6 @@ void gather_on_root(std::vector<T> const& local,
     }
 }
 
-/// Sorts @p t by (column, row) so the matrix handed to MUMPS does not depend on how the entries were distributed.
-void sort_by_column_row(int n, SparseTriplets& t) {
-    std::size_t const count = t.values.size();
-    std::vector<std::size_t> start(n + 1, 0);
-    for (int c : t.cols)
-        ++start[c];  // 1-based columns: start[c] counts column c - 1
-    for (int c = 0; c < n; ++c)
-        start[c + 1] += start[c];
-    std::vector<std::size_t> order(count);
-    std::vector<std::size_t> next(start.begin(), start.end() - 1);
-    for (std::size_t k = 0; k < count; ++k)
-        order[next[t.cols[k] - 1]++] = k;
-    for (int c = 0; c < n; ++c)
-        std::stable_sort(order.begin() + start[c],
-                         order.begin() + start[c + 1],
-                         [&t](std::size_t a, std::size_t b) {
-                             return t.rows[a] < t.rows[b];
-                         });
-
-    SparseTriplets sorted;
-    sorted.rows.resize(count);
-    sorted.cols.resize(count);
-    sorted.values.resize(count);
-    for (std::size_t k = 0; k < count; ++k) {
-        sorted.rows[k] = t.rows[order[k]];
-        sorted.cols[k] = t.cols[order[k]];
-        sorted.values[k] = t.values[order[k]];
-    }
-    t = std::move(sorted);
-}
-
 }  // namespace
 
 MumpsOptions MumpsOptions::from_env() {
@@ -271,8 +240,6 @@ int MumpsSolver::solve(int n,
         gather_on_root(local.rows, counts, global.rows, comm_);
         gather_on_root(local.cols, counts, global.cols, comm_);
         gather_on_root(local.values, counts, global.values, comm_);
-        if (rank_ == 0)
-            sort_by_column_row(n, global);
         stats_.time_gather = MPI_Wtime() - start;
 
         set_icntl(5, 0);
@@ -337,7 +304,8 @@ int MumpsSolver::solve(int n,
         std::max(1, infog(16));  // largest per-rank in-core estimate
     long budget_mb = options_.max_mem_mb > 0
                          ? options_.max_mem_mb
-                         : std::max(2 * estimate_mb, estimate_mb + 256);
+                         : estimate_mb + estimate_mb / 4 +
+                               64;  // ~1.25x: delayed pivots fit, see header
     if (options_.max_mem_mb <=
         0)  // the cap limits only the margin, never below the estimate itself
         budget_mb = std::max(estimate_mb, std::min(budget_mb, cap_mb));

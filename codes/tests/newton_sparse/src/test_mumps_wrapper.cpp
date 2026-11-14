@@ -204,9 +204,9 @@ void run_case(MumpsOptions options, std::string const& label) {
                     label + " [fresh, same matrix]");
 }
 
-/// Centralized input sorts the gathered entries, so MUMPS receives the same matrix for every column distribution.
-/// The parallel factorization (dynamic scheduling, delayed pivots) is not bit-reproducible, so solutions for
-/// different distributions, and repeated solves, must agree to roundoff; the measured differences are printed.
+/// Different column distributions hand MUMPS the same entries in a different order; solutions for different
+/// distributions, and repeated solves, must agree to roundoff (bit identity is not required); the measured
+/// differences are printed.
 void check_distribution_independence(MumpsOptions options,
                                      std::string const& label) {
     options.verbosity = 1;

@@ -18,8 +18,7 @@ namespace linear_solvers {
 /// Run-time settings of MumpsSolver; ICNTL numbers refer to the MUMPS 5.8 user guide.
 struct MumpsOptions {
     /// Gather the matrix on rank 0 (ICNTL(18)=0) so the zero-free-diagonal permutation ICNTL(6) can be used;
-    /// the gathered entries are sorted by (column, row), so the result does not depend on their distribution.
-    /// Otherwise use distributed assembled input (ICNTL(18)=3), which avoids the copy on rank 0.
+    /// otherwise use distributed assembled input (ICNTL(18)=3), which avoids the copy on rank 0.
     bool centralized = true;
     int ordering =
         5;  ///< ICNTL(7): 0 AMD, 2 AMF, 4 PORD, 5 METIS, 6 QAMD, 7 automatic.
@@ -42,8 +41,9 @@ struct MumpsOptions {
     /// CNTL(1): relative pivoting threshold. The MUMPS default 0.01 allowed pivot growth to a 1e-11
     /// residual on a Kadath-like test matrix (test_mumps_wrapper); 0.1 restores 1e-16 for ~4 % more fill.
     double pivot_threshold = 0.1;
-    /// ICNTL(23): working memory per rank in MB. 0 = automatic: max(2 x, + 256 MB) the largest per-rank
-    /// analysis estimate INFOG(16), at most 80 % of the free node memory per rank; doubled on workspace errors.
+    /// ICNTL(23): working memory per rank in MB. 0 = automatic: 1.25 x the largest per-rank analysis estimate
+    /// INFOG(16) + 64 MB on every rank (a rank with a tiny own estimate that receives delayed pivots then still
+    /// has room), at most 80 % of the free node memory per rank; doubled on workspace errors.
     int max_mem_mb = 0;
     /// ICNTL(6): column permutation towards a zero-free diagonal (centralized input only); 7 = automatic.
     int permutation = 7;

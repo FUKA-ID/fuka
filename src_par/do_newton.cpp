@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -392,6 +393,35 @@ std::string env_on_root(char const* name, std::string const& fallback) {
 	return value;
 }
 
+/// Peak resident memory (VmHWM) per rank, per node (sum over its ranks) and in total, printed by rank 0 after each
+/// Newton step so runs can be sized to the fewest nodes; collective.
+void report_memory() {
+	long hwm_kb = 0;
+	std::ifstream status ("/proc/self/status");
+	std::string key;
+	while (status >> key) {
+		if (key == "VmHWM:") {
+			status >> hwm_kb;
+			break;
+		}
+		status.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+	}
+	static MPI_Comm node = MPI_COMM_NULL;
+	if (node == MPI_COMM_NULL)
+		MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &node);
+	long node_kb = 0, rank_max_kb = 0, node_max_kb = 0, total_kb = 0;
+	MPI_Allreduce(&hwm_kb, &node_kb, 1, MPI_LONG, MPI_SUM, node);
+	MPI_Reduce(&hwm_kb, &rank_max_kb, 1, MPI_LONG, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&node_kb, &node_max_kb, 1, MPI_LONG, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&hwm_kb, &total_kb, 1, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	if (rank == 0)
+		std::cout << "Memory high-water mark (VmHWM): max " << rank_max_kb / 1024 << " MB per rank, max "
+		          << node_max_kb / 1024. / 1024. << " GB per node, total " << total_kb / 1024. / 1024. << " GB"
+		          << std::endl;
+}
+
 #ifdef KADATH_USE_MUMPS
 /// KADATH_NEWTON_DUMP_PATTERN=<prefix>: write this rank's Jacobian entries of the first
 /// KADATH_NEWTON_DUMP_STEPS (default 3) MUMPS Newton steps with at least KADATH_NEWTON_DUMP_MIN_N (default 0)
@@ -601,8 +631,16 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	double const eta_min = env_double_on_root("KADATH_KRYLOV_ETA_MIN", 1e-8);
 	double const eta_max = env_double_on_root("KADATH_KRYLOV_ETA_MAX", 1e-3);
 
-	bool refresh = !st.preconditioner || !st.preconditioner->has_factors() || st.syst != &syst || st.n != n ||
-	               (st.previous_norm > 0. && norm > st.previous_norm) || (max_age > 0 && st.age >= max_age);
+	char const* reason = nullptr;  // why this step refactors (nullptr: try GMRES)
+	if (!st.preconditioner || !st.preconditioner->has_factors())
+		reason = "no preconditioner";
+	else if (st.syst != &syst || st.n != n)
+		reason = "new system or resolution";
+	else if (st.previous_norm > 0. && norm > st.previous_norm)
+		reason = "residual grew";
+	else if (max_age > 0 && st.age >= max_age)
+		reason = "preconditioner too old";
+	bool const refresh = reason != nullptr;
 	std::vector<double> x;
 
 	if (!refresh) {
@@ -650,6 +688,7 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 			return X;
 		}
 		++st.stats.gmres_failures;
+		reason = "GMRES missed the forcing term";
 		if (rank == 0)
 			std::cout << "Newton-Krylov: GMRES did not reach " << eta << " in " << result.iterations
 			          << " iterations (relative residual " << result.relative_residual << ", preconditioner status "
@@ -657,7 +696,8 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	}
 
 	if (rank == 0)
-		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner" << std::endl;
+		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ", ||F|| = " << norm
+		          << ", previous " << st.previous_norm << ")" << std::endl;
 	st.preconditioner.reset();
 	int const status = sparse_newton_step(syst, second, x, st.preconditioner);
 	if (status != 0) {
@@ -687,6 +727,10 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	return X;
 }
 #endif
+
+void report_newton_memory() {
+	report_memory();
+}
 
 NewtonBackend newton_backend_from_env() {
 #ifdef KADATH_USE_MUMPS
@@ -877,6 +921,7 @@ bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SO
 	}
 
 	Array<double> X (linear_solvers::newton_update(*this, second, solver));
+	linear_solvers::report_newton_memory();
 
 	auto begin = std::chrono::system_clock::now();
 

@@ -13,6 +13,9 @@ enum class NewtonBackend { SCALAPACK, MUMPS };
 /// Read on rank 0 and broadcast so every rank agrees; collective.
 NewtonBackend newton_backend_from_env();
 
+/// Prints the peak resident memory (VmHWM) per rank, per node and in total on rank 0; collective.
+void report_newton_memory();
+
 /// True when KADATH_LINSOLVE_COMPARE=1: solve every step with both backends and print the difference.
 bool newton_compare_from_env();
 
