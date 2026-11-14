@@ -139,6 +139,8 @@ class System_of_eqs {
 	struct Phase_times {
 		double setup = 0. ; ///< Derivatives of the unknowns (terms, variable domains).
 		double defs = 0. ; ///< Metric quantities and definitions.
+		double met = 0. ; ///< Part of \c defs spent in the metric update.
+		std::vector<double> per_def ; ///< Part of \c defs spent in each definition (do_col_J only, index as \c def).
 		double eqs = 0. ; ///< Evaluation of the equations.
 		double exp = 0. ; ///< Export of the derivatives to the result (incl. integral equations).
 		long calls = 0 ;
@@ -146,6 +148,9 @@ class System_of_eqs {
 	bool profile_phases = false ; ///< Accumulate \c times_col_J and \c times_JX.
 	Phase_times times_col_J ; ///< Phases of do_col_J.
 	Phase_times times_JX ; ///< Phases of do_JX.
+	int get_ndef () const {return ndef ;} ; ///< Number of definitions.
+	/// Name and domain of definition \c i.
+	std::string def_label (int i) const {return std::string(names_def[i]) + " (dom " + std::to_string(def[i]->get_dom()) + ")" ;} ;
     protected:
 
   std::vector<std::tuple<std::string, int, int>> eq_list; ///< List of all equations through all domains, to match indices to expressions.

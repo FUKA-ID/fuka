@@ -32,6 +32,7 @@
 
 #include <chrono>
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -462,18 +463,48 @@ void dump_jacobian_pattern(int n, SparseTriplets const& local) {
 #ifdef KADATH_USE_MUMPS
 namespace {
 
-/// KADATH_NEWTON_PROFILE=1: phases of do_col_J / do_JX summed over all ranks since the last report, per call.
-void report_phase_times(char const* what, System_of_eqs::Phase_times& times) {
+/// KADATH_NEWTON_PROFILE=1: phases of do_col_J / do_JX summed over all ranks since the last report, per call,
+/// with the metric part and (do_col_J) the most expensive definitions, summed over their domains.
+void report_phase_times(System_of_eqs const& syst, char const* what, System_of_eqs::Phase_times& times) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	double local[5] = {times.setup, times.defs, times.eqs, times.exp, static_cast<double>(times.calls)};
-	double sum[5];
-	MPI_Reduce(local, sum, 5, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	double local[6] = {times.setup, times.defs, times.eqs, times.exp, static_cast<double>(times.calls), times.met};
+	double sum[6];
+	MPI_Reduce(local, sum, 6, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	int const ndef = syst.get_ndef();
+	std::vector<double> per_def(ndef, 0.);
+	if (static_cast<int>(times.per_def.size()) == ndef)
+		per_def = times.per_def;
+	std::vector<double> per_def_sum(ndef, 0.);
+	if (ndef > 0)
+		MPI_Reduce(per_def.data(), per_def_sum.data(), ndef, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 	times = System_of_eqs::Phase_times{};
-	if (rank == 0 && sum[4] > 0.)
-		std::cout << "Profile: " << what << " phases per call (" << sum[4] << " calls, all ranks): setup "
-		          << sum[0] / sum[4] << " s, definitions+metric " << sum[1] / sum[4] << " s, equations "
-		          << sum[2] / sum[4] << " s, export " << sum[3] / sum[4] << " s" << std::endl;
+	if (rank != 0 || sum[4] <= 0.)
+		return;
+	double const calls = sum[4];
+	std::cout << "Profile: " << what << " phases per call (" << calls << " calls, all ranks): setup "
+	          << sum[0] / calls << " s, definitions+metric " << sum[1] / calls << " s (metric " << sum[5] / calls
+	          << " s), equations " << sum[2] / calls << " s, export " << sum[3] / calls << " s" << std::endl;
+	double total = 0.;
+	for (double t : per_def_sum)
+		total += t;
+	if (total <= 0.)
+		return;
+	// Sum over domains: the name without " (dom N)".
+	std::map<std::string, double> by_name;
+	for (int i = 0; i < ndef; ++i) {
+		std::string label = syst.def_label(i);
+		by_name[label.substr(0, label.rfind(" (dom"))] += per_def_sum[i];
+	}
+	std::vector<std::pair<double, std::string>> ranked;
+	for (auto const& [name, t] : by_name)
+		ranked.emplace_back(t, name);
+	std::sort(ranked.rbegin(), ranked.rend());
+	std::cout << "Profile: " << what << " definitions (" << ndef << " in " << by_name.size()
+	          << " names), share of definition time " << total / calls << " s per call:";
+	for (std::size_t k = 0; k < std::min<std::size_t>(ranked.size(), 15); ++k)
+		std::cout << (k ? "," : "") << " " << ranked[k].second << " " << 100. * ranked[k].first / total << " %";
+	std::cout << std::endl;
 }
 
 /// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
@@ -498,7 +529,7 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		append_column(syst.do_col_J(col), col, local);
 	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
 	if (syst.profile_phases)
-		report_phase_times("do_col_J", syst.times_col_J);
+		report_phase_times(syst, "do_col_J", syst.times_col_J);
 	dump_jacobian_pattern(n, local);
 	if (drop_tolerance > 0.) {
 		std::vector<double> row_max, col_max;
@@ -725,7 +756,7 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 		    gmres(apply_j, apply_m, b, x, eta, trial ? std::min(trial_iterations, max_iterations) : max_iterations);
 		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		if (syst.profile_phases)
-			report_phase_times("do_JX", syst.times_JX);
+			report_phase_times(syst, "do_JX", syst.times_JX);
 		double const t = elapsed_time(begin);
 
 		if (result.converged && preconditioner_status == 0) {

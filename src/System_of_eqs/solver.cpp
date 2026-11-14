@@ -146,9 +146,12 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 				cst[i]->set_der_zero() ;
 	}
 	lap(times_JX.setup) ;
+	double const t_met = profile_phases ? phase_clock() : 0. ;
 	if (met!=0x0)  
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		met->update(d) ;
+	if (profile_phases)
+		times_JX.met += phase_clock() - t_met ;
 	// Delete the definitions 
 	for (int i=0 ; i<ndef ; i++)
 		def[i]->compute_res() ;
@@ -251,14 +254,28 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	auto todo = [&](int d) {
 		return !skip || (d<dom_min) || (d>dom_max) || active(d) || !der_clean[d-dom_min] ;
 	} ;
+	double t_sub = profile_phases ? phase_clock() : 0. ;
+	auto sub = [&](double& acc) {
+		if (profile_phases) {
+			double const now = phase_clock() ;
+			acc += now - t_sub ;
+			t_sub = now ;
+		}
+	} ;
+	if (profile_phases && static_cast<int>(times_col_J.per_def.size())!=ndef)
+		times_col_J.per_def.assign(ndef, 0.) ;
 	if (met!=0x0)
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		if (todo(d))
 			met->update(d) ;
+	sub(times_col_J.met) ;
 
 	for (int i=0 ; i<ndef ; i++)
-		if (todo(def[i]->get_dom()))
+		if (todo(def[i]->get_dom())) {
 			def[i]->compute_res() ;
+			if (profile_phases)
+				sub(times_col_J.per_def[i]) ;
+		}
 
 	if (track) {
 		der_clean.assign(ndom, 1) ;
