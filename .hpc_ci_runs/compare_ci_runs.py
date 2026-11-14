@@ -113,12 +113,16 @@ def version_of(path: Path) -> str:
     return parse_info(path).get("metadata", {}).get("fuka_version", "unknown")
 
 
-def write_report(new_root: Path, ref_root: Path, tol: float) -> tuple[str, int]:
-    """Return the markdown report and the number of files above ``tol``."""
+def write_report(new_root: Path, ref_root: Path, tol: float, atol: float = 0.0) -> tuple[str, int]:
+    """Return the markdown report and the number of files above ``tol``.
+
+    Differences with ``|new - ref| <= atol`` always pass, so parameters that vanish analytically (e.g. omega of a
+    non-spinning hole, ~1e-17) are not compared relative to roundoff.
+    """
     lines = [
         f"New tree: `{new_root}`  ",
         f"Reference tree: `{ref_root}`  ",
-        f"Tolerance (relative): {tol:g}",
+        f"Tolerance (relative): {tol:g}, absolute floor: {atol:g}",
         "",
         "| solution | versions (new / ref) | max rel. diff | parameter | new | ref | status |",
         "|---|---|---|---|---|---|---|",
@@ -135,8 +139,9 @@ def write_report(new_root: Path, ref_root: Path, tol: float) -> tuple[str, int]:
         if not diffs:
             lines.append(f"| `{rel_path}` | {versions} | | | | | nothing to compare |")
             continue
-        worst = max(diffs, key=lambda d: d.rel)
-        status = "ok" if worst.rel <= tol else "DIFF"
+        significant = [d for d in diffs if abs(d.new - d.ref) > atol]
+        worst = max(significant or diffs, key=lambda d: d.rel)
+        status = "ok" if not significant or worst.rel <= tol else "DIFF"
         n_fail += status != "ok"
         lines.append(
             f"| `{rel_path}` | {versions} | {worst.rel:.2e} | "
@@ -152,6 +157,7 @@ def main() -> int:
     parser.add_argument("new_tree", type=Path, help="tree with the new solutions")
     parser.add_argument("reference_tree", type=Path, help="tree with the reference solutions")
     parser.add_argument("--tol", type=float, default=1e-6, help="relative tolerance")
+    parser.add_argument("--atol", type=float, default=0.0, help="absolute differences below this always pass")
     parser.add_argument("--out", type=Path, help="write the markdown report to this file")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -160,7 +166,7 @@ def main() -> int:
         if not root.is_dir():
             parser.error(f"{root} is not a directory")
 
-    report, n_fail = write_report(args.new_tree, args.reference_tree, args.tol)
+    report, n_fail = write_report(args.new_tree, args.reference_tree, args.tol, args.atol)
     if args.out:
         args.out.write_text(report)
         log.info("report written to %s", args.out)
