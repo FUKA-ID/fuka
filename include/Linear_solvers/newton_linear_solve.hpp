@@ -32,8 +32,33 @@ Array<double> newton_update_mumps(System_of_eqs& syst,
                                   int* status_out = nullptr);
 #endif
 
+#ifdef KADATH_USE_MUMPS
+/// Counters of the Newton-Krylov mode since the last reset_newton_krylov().
+struct NewtonKrylovStats {
+    int krylov_steps =
+        0;  ///< Newton steps solved by GMRES with an existing preconditioner.
+    int krylov_iterations = 0;  ///< GMRES iterations summed over those steps.
+    int refactorizations =
+        0;  ///< Exact sparse Newton steps (new preconditioner).
+    int gmres_failures =
+        0;  ///< GMRES runs that missed the forcing term and caused a refactorization.
+};
+
+/// Newton step with GMRES (J v from do_JX) preconditioned by kept MUMPS factors, refactoring when needed;
+/// selected by KADATH_NEWTON_METHOD=krylov with the MUMPS backend; collective.
+Array<double> newton_update_krylov(System_of_eqs& syst,
+                                   Array<double> const& second);
+
+/// Counters of the Newton-Krylov mode.
+NewtonKrylovStats const& newton_krylov_stats();
+
+/// Drops the kept preconditioner and the counters.
+void reset_newton_krylov();
+#endif
+
 /// Dispatches to the configured backend; GAUSS_NEWTON always uses ScaLAPACK; collective.
-/// If MUMPS fails, the step is redone with ScaLAPACK unless KADATH_MUMPS_FALLBACK=abort.
+/// MUMPS failures are retried along mumps_retry_ladder; if every attempt fails the run aborts, or the step is
+/// redone with dense ScaLAPACK when KADATH_MUMPS_FALLBACK=scalapack.
 Array<double> newton_update(System_of_eqs& syst,
                             Array<double> const& second,
                             System_of_eqs::SOLVER solver);

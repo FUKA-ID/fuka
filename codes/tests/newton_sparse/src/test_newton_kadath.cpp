@@ -12,6 +12,7 @@
  *  T4a one Newton update: MUMPS (centralized and distributed input) vs ScaLAPACK, relative difference < 1e-10
  *  T4b full solves with KADATH_LINSOLVE=mumps and =scalapack from the same guess: same iteration count,
  *      matching error history, same lam and P, and both agree with the analytic solution
+ *  T4d Newton-Krylov (GMRES + kept MUMPS factors) converges to the exact-Newton solution within tolerance
  *  T4c a rejected MUMPS solution (residual tolerance 0) falls back to ScaLAPACK step by step: bitwise identical
  *
  * Run with 1 and 4 MPI ranks; returns 0 if all checks pass (77 = skipped, built without MUMPS).
@@ -285,10 +286,11 @@ SolveResult test_full_solve() {
     return dense;
 }
 
-/// T4c: with KADATH_MUMPS_RESIDUAL_TOL=0 every MUMPS solution is rejected by the residual check; each Newton step
-/// must then fall back to ScaLAPACK, so the whole solve reproduces the ScaLAPACK reference exactly.
+/// T4c: with KADATH_MUMPS_RESIDUAL_TOL=0 every attempt of the retry ladder is rejected by the residual check; with
+/// KADATH_MUMPS_FALLBACK=scalapack each Newton step must then be redone densely, reproducing the ScaLAPACK solve.
 void test_fallback(SolveResult const& dense) {
     setenv("KADATH_MUMPS_RESIDUAL_TOL", "0", 1);
+    setenv("KADATH_MUMPS_FALLBACK", "scalapack", 1);
     {
         Problem problem;
         problem.syst.vars_to_terms();
@@ -301,6 +303,7 @@ void test_fallback(SolveResult const& dense) {
     }
     SolveResult const fallback = solve_with("mumps");
     unsetenv("KADATH_MUMPS_RESIDUAL_TOL");
+    unsetenv("KADATH_MUMPS_FALLBACK");
 
     check(fallback.converged && fallback.iterations == dense.iterations,
           "T4c fallback solve converged in the same " +
@@ -310,6 +313,40 @@ void test_fallback(SolveResult const& dense) {
     check(same,
           "T4c fallback solve bitwise identical to the ScaLAPACK solve "
           "(errors, lam, P)");
+}
+
+/// T4d: Newton-Krylov (KADATH_NEWTON_METHOD=krylov) must converge to the exact-Newton solution within the Newton
+/// tolerance (not bitwise: its iterates differ), with at least one step solved by preconditioned GMRES.
+void test_krylov(SolveResult const& dense) {
+    reset_newton_krylov();
+    setenv("KADATH_NEWTON_METHOD", "krylov", 1);
+    SolveResult const krylov = solve_with("mumps");
+    unsetenv("KADATH_NEWTON_METHOD");
+    NewtonKrylovStats const stats = newton_krylov_stats();
+    if (rank_ == 0)
+        std::cout << "T4d Newton-Krylov: " << krylov.iterations
+                  << " Newton steps, " << stats.krylov_steps << " by GMRES ("
+                  << stats.krylov_iterations << " iterations), "
+                  << stats.refactorizations << " refactorizations, "
+                  << stats.gmres_failures << " GMRES failures" << std::endl;
+
+    check(krylov.converged,
+          "T4d Newton-Krylov converged in " +
+              std::to_string(krylov.iterations) + " steps");
+    check(stats.krylov_steps >= 1,
+          "T4d at least one step solved by GMRES with a kept preconditioner");
+    check(std::fabs(krylov.lam - dense.lam) < 1e-9,
+          "T4d lam agrees with exact Newton: |dlam| = " +
+              sci(std::fabs(krylov.lam - dense.lam)));
+    double worst = 0.;
+    for (std::size_t k = 0; k < dense.samples.size(); ++k)
+        worst = std::max(worst,
+                         std::fabs(krylov.samples[k] - dense.samples[k]) /
+                             std::fabs(dense.samples[k]));
+    check(worst < 1e-9,
+          "T4d P agrees with exact Newton: max rel. diff = " + sci(worst));
+    // No reset here: the kept MUMPS instance must be released inside MPI_Finalize (MPI_COMM_SELF attribute);
+    // releasing it after MPI_Finalize makes the process exit with an MPI error and the test fail.
 }
 
 }  // namespace
@@ -323,6 +360,7 @@ int main(int argc, char** argv) {
     test_single_update();
     SolveResult const dense = test_full_solve();
     test_fallback(dense);
+    test_krylov(dense);
 
     if (rank_ == 0)
         std::cout << (failures == 0 ? "test_newton_kadath: PASS"

@@ -26,6 +26,7 @@
 #include "Linear_solvers/newton_linear_solve.hpp"
 #include "Linear_solvers/sparse_triplets.hpp"
 #ifdef KADATH_USE_MUMPS
+#include "Linear_solvers/gmres.hpp"
 #include "Linear_solvers/mumps_solver.hpp"
 #endif
 
@@ -35,6 +36,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -428,7 +430,12 @@ void dump_jacobian_pattern(int n, SparseTriplets const& local) {
 }  // namespace
 
 #ifdef KADATH_USE_MUMPS
-Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& second, int* status_out) {
+namespace {
+
+/// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
+/// successful solver (with its factors) is returned in @p solver. Collective. @return 0 or the last status.
+int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::vector<double>& x,
+                       std::unique_ptr<MumpsSolver>& solver) {
 	int rank, nproc;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
@@ -445,37 +452,33 @@ Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& seco
 	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
 	dump_jacobian_pattern(n, local);
 
-	std::vector<double> x (second.get_data(), second.get_data() + n);
-	MumpsSolver mumps (MPI_COMM_WORLD);
-	int const status = mumps.solve(n, local, x);
-
-	if (status != 0) {
-		if (rank == 0) {
-			if (status == -6 || status == -10)
-				std::cout << "Jacobian is singular! Stopping. (" << mumps_error_message(status) << ")" << std::endl;
-			else
-				std::cout << "MUMPS failed: " << mumps_error_message(status) << std::endl;
-			if (status == kInaccurateSolution)
-				std::cout << "MUMPS: relative residual of the rejected solution = "
-				          << mumps.stats().relative_residual << std::endl;
-			std::cout << "MUMPS: pivots delayed = " << mumps.stats().delayed_pivots
-			          << ", off-diagonal = " << mumps.stats().off_diagonal_pivots
-			          << ", estimated factor entries = " << mumps.stats().estimated_factor_entries << std::endl;
+	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
+	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(MumpsOptions::from_env());
+	int status = 0;
+	for (std::size_t attempt = 0; attempt < ladder.size(); ++attempt) {
+		x.assign(second.get_data(), second.get_data() + n);
+		solver.reset();
+		solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, ladder[attempt].options);
+		status = solver->solve(n, local, x);
+		if (rank == 0 && status != 0) {
+			MumpsStats const& f = solver->stats();
+			std::cout << "MUMPS attempt " << attempt + 1 << " (" << ladder[attempt].name
+			          << ") failed: " << mumps_error_message(status) << "; residual = " << f.relative_residual
+			          << ", pivots delayed = " << f.delayed_pivots << ", off-diagonal = " << f.off_diagonal_pivots
+			          << ", estimated factor entries = " << f.estimated_factor_entries << std::endl;
+			if (attempt + 1 < ladder.size())
+				std::cout << "MUMPS: retrying with " << ladder[attempt + 1].name << std::endl;
 		}
-		if (status_out != nullptr) {
-			*status_out = status;
-			Array<double> none (n);
-			none = 0.;
-			return none;
+		if (status == 0) {
+			if (rank == 0 && attempt > 0)
+				std::cout << "MUMPS: attempt " << attempt + 1 << " (" << ladder[attempt].name << ") succeeded"
+				          << std::endl;
+			break;
 		}
-		MPI_Barrier(MPI_COMM_WORLD);
-		abort();
 	}
-	if (status_out != nullptr)
-		*status_out = 0;
 
-	if (rank == 0) {
-		MumpsStats const& s = mumps.stats();
+	if (status == 0 && rank == 0) {
+		MumpsStats const& s = solver->stats();
 		double const dense = 1.0 * n * n;
 		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / dense << " % of dense), factors = "
 		          << s.factor_entries << " (fill " << 1.0 * s.factor_entries / s.nnz << "), flops = "
@@ -491,6 +494,192 @@ Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& seco
 		          << " seconds (gather " << s.time_gather << ", analysis " << s.time_analysis
 		          << ", factor+solve " << s.time_factor_solve << ")" << std::endl;
 	}
+
+	return status;
+}
+
+}  // namespace
+
+Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& second, int* status_out) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	int const n = syst.get_nbr_unknowns();
+	std::vector<double> x;
+	std::unique_ptr<MumpsSolver> solver;
+	int const status = sparse_newton_step(syst, second, x, solver);
+
+	if (status != 0) {
+		if (rank == 0 && (status == -6 || status == -10))
+			std::cout << "Jacobian is singular! Stopping. (" << mumps_error_message(status) << ")" << std::endl;
+		if (status_out != nullptr) {
+			*status_out = status;
+			Array<double> none (n);
+			none = 0.;
+			return none;
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+		abort();
+	}
+	if (status_out != nullptr)
+		*status_out = 0;
+
+	Array<double> X (n);
+	for (int i = 0; i < n; ++i)
+		X.set(i) = x[i];
+	return X;
+}
+
+namespace {
+
+/// Preconditioner and history kept between Newton-Krylov steps of one system.
+struct KrylovState {
+	System_of_eqs const* syst = nullptr;
+	int n = 0;
+	std::unique_ptr<MumpsSolver> preconditioner;
+	int age = 0;                   ///< Newton steps since the preconditioner was factored.
+	double previous_norm = -1.;    ///< ||second||_2 of the previous step.
+	double previous_eta = -1.;     ///< Forcing term of the previous GMRES step (< 0: none).
+	NewtonKrylovStats stats;
+};
+
+KrylovState& krylov_state();
+
+/// MPI_COMM_SELF attributes are deleted first in MPI_Finalize, while MPI still works: release the kept MUMPS
+/// instance there (its JOB=-2 communicates) instead of in the static destructor after MPI_Finalize.
+int release_krylov_state(MPI_Comm, int, void*, void*) {
+	krylov_state() = KrylovState{};
+	return MPI_SUCCESS;
+}
+
+KrylovState& krylov_state() {
+	static KrylovState state;
+	static bool registered = false;
+	if (!registered) {
+		registered = true;
+		int keyval;
+		MPI_Comm_create_keyval(MPI_COMM_NULL_COPY_FN, release_krylov_state, &keyval, nullptr);
+		MPI_Comm_set_attr(MPI_COMM_SELF, keyval, nullptr);
+	}
+	return state;
+}
+
+double env_double_on_root(char const* name, double fallback) {
+	return std::stod(env_on_root(name, std::to_string(fallback)));
+}
+
+}  // namespace
+
+NewtonKrylovStats const& newton_krylov_stats() {
+	return krylov_state().stats;
+}
+
+void reset_newton_krylov() {
+	krylov_state() = KrylovState{};
+}
+
+/// Newton-Krylov after arXiv:2608.07653: GMRES with the matrix-free J v = do_JX(v), right-preconditioned by the
+/// MUMPS factors of an earlier Jacobian; Eisenstat-Walker forcing (choice 2, Eisenstat & Walker, SIAM J. Sci.
+/// Comput. 17, 16 (1996), eq. 2.6 with gamma = 0.9, alpha = 2, safeguard 3.4) bounded to [eta_min, eta_max].
+/// The preconditioner is refactored (an exact sparse Newton step) when absent, when n or the system changed,
+/// when ||F|| grew, when it is older than KADATH_KRYLOV_MAX_AGE steps (0 = unlimited), or when GMRES does not
+/// converge within KADATH_KRYLOV_MAX_ITERATIONS. The fields only change after this returns, so a failed GMRES
+/// leaves the system untouched for the exact step.
+Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& second) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	int const n = syst.get_nbr_unknowns();
+	KrylovState& st = krylov_state();
+
+	double norm = 0.;
+	for (int i = 0; i < n; ++i)
+		norm += second(i) * second(i);
+	norm = std::sqrt(norm);
+	MPI_Bcast(&norm, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+	int const max_iterations = std::stoi(env_on_root("KADATH_KRYLOV_MAX_ITERATIONS", "48"));
+	int const max_age = std::stoi(env_on_root("KADATH_KRYLOV_MAX_AGE", "0"));
+	double const eta_min = env_double_on_root("KADATH_KRYLOV_ETA_MIN", 1e-8);
+	double const eta_max = env_double_on_root("KADATH_KRYLOV_ETA_MAX", 1e-3);
+
+	bool refresh = !st.preconditioner || !st.preconditioner->has_factors() || st.syst != &syst || st.n != n ||
+	               (st.previous_norm > 0. && norm > st.previous_norm) || (max_age > 0 && st.age >= max_age);
+	std::vector<double> x;
+
+	if (!refresh) {
+		double const gamma = 0.9, alpha = 2.;
+		double eta = gamma * std::pow(norm / st.previous_norm, alpha);
+		if (st.previous_eta > 0. && gamma * std::pow(st.previous_eta, alpha) > 0.1)
+			eta = std::max(eta, gamma * std::pow(st.previous_eta, alpha));
+		eta = std::min(eta_max, std::max(eta_min, eta));
+
+		auto apply_j = [&syst, n](std::vector<double> const& v, std::vector<double>& w) {
+			Array<double> av (n);
+			for (int i = 0; i < n; ++i)
+				av.set(i) = v[i];
+			Array<double> const jv (syst.do_JX(av));
+			w.assign(jv.get_data(), jv.get_data() + n);
+			MPI_Bcast(w.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);  // every rank continues with identical data
+		};
+		int preconditioner_status = 0;
+		auto apply_m = [&st, &preconditioner_status](std::vector<double> const& v, std::vector<double>& z) {
+			z = v;
+			int const s = st.preconditioner->solve_factored(z);
+			if (s != 0)
+				preconditioner_status = s;
+		};
+		std::vector<double> const b (second.get_data(), second.get_data() + n);
+
+		auto begin = std::chrono::system_clock::now();
+		GmresResult const result = gmres(apply_j, apply_m, b, x, eta, max_iterations);
+		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		double const t = elapsed_time(begin);
+
+		if (result.converged && preconditioner_status == 0) {
+			++st.age;
+			st.previous_norm = norm;
+			st.previous_eta = eta;
+			++st.stats.krylov_steps;
+			st.stats.krylov_iterations += result.iterations;
+			if (rank == 0)
+				std::cout << "Newton-Krylov: GMRES " << result.iterations << " iterations, relative residual "
+				          << result.relative_residual << " <= forcing term " << eta << ", preconditioner age "
+				          << st.age << ", " << t << " seconds" << std::endl;
+			Array<double> X (n);
+			for (int i = 0; i < n; ++i)
+				X.set(i) = x[i];
+			return X;
+		}
+		++st.stats.gmres_failures;
+		if (rank == 0)
+			std::cout << "Newton-Krylov: GMRES did not reach " << eta << " in " << result.iterations
+			          << " iterations (relative residual " << result.relative_residual << ", preconditioner status "
+			          << preconditioner_status << "); refactoring the Jacobian" << std::endl;
+	}
+
+	if (rank == 0)
+		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner" << std::endl;
+	st.preconditioner.reset();
+	int const status = sparse_newton_step(syst, second, x, st.preconditioner);
+	if (status != 0) {
+		st = KrylovState{};
+		if (env_on_root("KADATH_MUMPS_FALLBACK", "abort") != "scalapack") {
+			if (rank == 0)
+				std::cout << "MUMPS failed with every configuration of the retry ladder (last INFOG(1) = " << status
+				          << "); stopping." << std::endl;
+			MPI_Barrier(MPI_COMM_WORLD);
+			abort();
+		}
+		if (rank == 0)
+			std::cout << "WARNING: MUMPS failed (INFOG(1) = " << status
+			          << "); this Newton step falls back to the dense ScaLAPACK solver" << std::endl;
+		return newton_update_scalapack(syst, second, System_of_eqs::NEWTON_RAPHSON);
+	}
+	st.syst = &syst;
+	st.n = n;
+	st.age = 0;
+	st.previous_norm = norm;
+	st.previous_eta = -1.;
+	++st.stats.refactorizations;
 
 	Array<double> X (n);
 	for (int i = 0; i < n; ++i)
@@ -575,13 +764,22 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 
 	Array<double> X (syst.get_nbr_unknowns());
 #ifdef KADATH_USE_MUMPS
+	if (backend == NewtonBackend::MUMPS && env_on_root("KADATH_NEWTON_METHOD", "newton") == "krylov") {
+		if (rank == 0)
+			std::cout << "Newton linear solver: Newton-Krylov (GMRES + MUMPS preconditioner)" << std::endl;
+		return newton_update_krylov(syst, second);
+	}
 	if (backend == NewtonBackend::MUMPS) {
 		if (rank == 0)
 			std::cout << "Newton linear solver: MUMPS (sparse)" << std::endl;
 		int status = 0;
 		X = newton_update_mumps(syst, second, &status);
 		if (status != 0) {
-			if (env_on_root("KADATH_MUMPS_FALLBACK", "scalapack") != "scalapack") {
+			// Dense ScaLAPACK only on request: it re-assembles the Jacobian and needs n^2 memory.
+			if (env_on_root("KADATH_MUMPS_FALLBACK", "abort") != "scalapack") {
+				if (rank == 0)
+					std::cout << "MUMPS failed with every configuration of the retry ladder (last INFOG(1) = " << status
+					          << "); stopping. KADATH_MUMPS_FALLBACK=scalapack redoes such steps densely." << std::endl;
 				MPI_Barrier(MPI_COMM_WORLD);
 				abort();
 			}
