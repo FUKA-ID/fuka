@@ -492,18 +492,22 @@ void report_phase_times(System_of_eqs const& syst, char const* what, System_of_e
 		return;
 	// Sum over domains: the name without " (dom N)".
 	std::map<std::string, double> by_name;
+	std::map<std::string, int> n_doms;
 	for (int i = 0; i < ndef; ++i) {
 		std::string label = syst.def_label(i);
-		by_name[label.substr(0, label.rfind(" (dom"))] += per_def_sum[i];
+		std::string const name = label.substr(0, label.rfind(" (dom"));
+		by_name[name] += per_def_sum[i];
+		n_doms[name]++;
 	}
 	std::vector<std::pair<double, std::string>> ranked;
 	for (auto const& [name, t] : by_name)
-		ranked.emplace_back(t, name);
+		ranked.emplace_back(t, name + " [" + std::to_string(n_doms[name]) + " dom]");
 	std::sort(ranked.rbegin(), ranked.rend());
 	std::cout << "Profile: " << what << " definitions (" << ndef << " in " << by_name.size()
 	          << " names), share of definition time " << total / calls << " s per call:";
 	for (std::size_t k = 0; k < std::min<std::size_t>(ranked.size(), 15); ++k)
-		std::cout << (k ? "," : "") << " " << ranked[k].second << " " << 100. * ranked[k].first / total << " %";
+		std::cout << (k ? "," : "") << " " << ranked[k].second << " " << 100. * ranked[k].first / total << " % ("
+		          << ranked[k].first / calls << " s)";
 	std::cout << std::endl;
 }
 
@@ -529,7 +533,10 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		append_column(syst.do_col_J(col), col, local);
 	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
 	if (syst.profile_phases)
+	{
 		report_phase_times(syst, "do_col_J", syst.times_col_J);
+		report_phase_times(syst, "sec_member", syst.times_sec);
+	}
 	dump_jacobian_pattern(n, local);
 	if (drop_tolerance > 0.) {
 		std::vector<double> row_max, col_max;

@@ -148,6 +148,7 @@ class System_of_eqs {
 	bool profile_phases = false ; ///< Accumulate \c times_col_J and \c times_JX.
 	Phase_times times_col_J ; ///< Phases of do_col_J.
 	Phase_times times_JX ; ///< Phases of do_JX.
+	Phase_times times_sec ; ///< Phases of sec_member (values only; setup = vars_to_terms).
 	int get_ndef () const {return ndef ;} ; ///< Number of definitions.
 	/// Name and domain of definition \c i.
 	std::string def_label (int i) const {return std::string(names_def[i]) + " (dom " + std::to_string(def[i]->get_dom()) + ")" ;} ;

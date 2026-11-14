@@ -59,18 +59,39 @@ Array<double> System_of_eqs::check_equations() {
 Array<double> System_of_eqs::sec_member() {
 
 	der_clean.clear() ;
+	double t_phase = profile_phases ? phase_clock() : 0. ;
+	auto lap = [&](double& acc) {
+		if (profile_phases) {
+			double const now = phase_clock() ;
+			acc += now - t_phase ;
+			t_phase = now ;
+		}
+	} ;
+	if (profile_phases && static_cast<int>(times_sec.per_def.size())!=ndef)
+		times_sec.per_def.assign(ndef, 0.) ;
 
 	vars_to_terms() ;
+	lap(times_sec.setup) ;
 
 	if (met!=0x0)
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		met->update(d) ;
-	for (int i=0 ; i<ndef ; i++)
+	double const t_defs = t_phase ;
+	lap(times_sec.met) ;
+	for (int i=0 ; i<ndef ; i++) {
 		def[i]->compute_res() ;
+		if (profile_phases)
+			lap(times_sec.per_def[i]) ;
+	}
+	if (profile_phases)
+		times_sec.defs += t_phase - t_defs ;
 
 	int conte = 0 ;
 	for (int i=0 ; i<neq ; i++)
 	     eq[i]->apply(conte, results) ;
+	lap(times_sec.eqs) ;
+	if (profile_phases)
+		times_sec.calls ++ ;
 
 	// Need to assert the size :
 	if (nbr_conditions==-1) {
