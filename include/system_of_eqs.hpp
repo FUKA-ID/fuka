@@ -135,6 +135,17 @@ class System_of_eqs {
 	/// previous one, instead of in every domain (same results). Requires sec_member() after any change of the
 	/// fields or constants, as every Newton driver does. Not used with global definitions.
 	bool skip_clean_domains = true ;
+	/// Wall time spent in the phases of do_col_J / do_JX, accumulated while \c profile_phases is set.
+	struct Phase_times {
+		double setup = 0. ; ///< Derivatives of the unknowns (terms, variable domains).
+		double defs = 0. ; ///< Metric quantities and definitions.
+		double eqs = 0. ; ///< Evaluation of the equations.
+		double exp = 0. ; ///< Export of the derivatives to the result (incl. integral equations).
+		long calls = 0 ;
+	} ;
+	bool profile_phases = false ; ///< Accumulate \c times_col_J and \c times_JX.
+	Phase_times times_col_J ; ///< Phases of do_col_J.
+	Phase_times times_JX ; ///< Phases of do_JX.
     protected:
 
   std::vector<std::tuple<std::string, int, int>> eq_list; ///< List of all equations through all domains, to match indices to expressions.

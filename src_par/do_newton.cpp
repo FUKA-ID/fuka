@@ -462,6 +462,20 @@ void dump_jacobian_pattern(int n, SparseTriplets const& local) {
 #ifdef KADATH_USE_MUMPS
 namespace {
 
+/// KADATH_NEWTON_PROFILE=1: phases of do_col_J / do_JX summed over all ranks since the last report, per call.
+void report_phase_times(char const* what, System_of_eqs::Phase_times& times) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	double local[5] = {times.setup, times.defs, times.eqs, times.exp, static_cast<double>(times.calls)};
+	double sum[5];
+	MPI_Reduce(local, sum, 5, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	times = System_of_eqs::Phase_times{};
+	if (rank == 0 && sum[4] > 0.)
+		std::cout << "Profile: " << what << " phases per call (" << sum[4] << " calls, all ranks): setup "
+		          << sum[0] / sum[4] << " s, definitions+metric " << sum[1] / sum[4] << " s, equations "
+		          << sum[2] / sum[4] << " s, export " << sum[3] / sum[4] << " s" << std::endl;
+}
+
 /// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
 /// successful solver (with its factors) is returned in @p solver. Collective. @return 0 or the last status.
 /// @param drop_tolerance > 0 removes entries negligible relative to both their row and column maximum before
@@ -483,6 +497,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	for (int col : block_cyclic_columns(n, column_block, rank, nproc))
 		append_column(syst.do_col_J(col), col, local);
 	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
+	if (syst.profile_phases)
+		report_phase_times("do_col_J", syst.times_col_J);
 	dump_jacobian_pattern(n, local);
 	if (drop_tolerance > 0.) {
 		std::vector<double> row_max, col_max;
@@ -708,6 +724,8 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 		GmresResult const result =
 		    gmres(apply_j, apply_m, b, x, eta, trial ? std::min(trial_iterations, max_iterations) : max_iterations);
 		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		if (syst.profile_phases)
+			report_phase_times("do_JX", syst.times_JX);
 		double const t = elapsed_time(begin);
 
 		if (result.converged && preconditioner_status == 0) {
@@ -910,6 +928,7 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 	    (solver == System_of_eqs::GAUSS_NEWTON) ? NewtonBackend::SCALAPACK : newton_backend_from_env();
 	// KADATH_JACOBIAN_SKIP_CLEAN=0: do_col_J recomputes definitions and metric in every domain (old behaviour).
 	syst.skip_clean_domains = env_on_root("KADATH_JACOBIAN_SKIP_CLEAN", "1") == "1";
+	syst.profile_phases = env_on_root("KADATH_NEWTON_PROFILE", "0") != "0";  // 2: phases only, no extra probes
 
 	Array<double> X (syst.get_nbr_unknowns());
 #ifdef KADATH_USE_MUMPS

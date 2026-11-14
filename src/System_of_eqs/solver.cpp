@@ -19,10 +19,18 @@
 */
 
 #include <algorithm>
+#include <chrono>
 #include "system_of_eqs.hpp"
 #include "scalar.hpp"
 #include "metric.hpp"
 namespace Kadath {
+namespace {
+/// Seconds since the first call; only used when System_of_eqs::profile_phases is set.
+double phase_clock() {
+	static auto const start = std::chrono::steady_clock::now() ;
+	return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() ;
+}
+}
 Array<double> System_of_eqs::check_equations() {
 
 	
@@ -107,6 +115,14 @@ void System_of_eqs::find_variable_domains() {
 
 Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 
+	double t_phase = profile_phases ? phase_clock() : 0. ;
+	auto lap = [&](double& acc) {
+		if (profile_phases) {
+			double const now = phase_clock() ;
+			acc += now - t_phase ;
+			t_phase = now ;
+		}
+	} ;
 	der_clean.clear() ;
 	find_variable_domains() ;
 	xx_to_ders(xx) ;
@@ -129,16 +145,19 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 			else
 				cst[i]->set_der_zero() ;
 	}
+	lap(times_JX.setup) ;
 	if (met!=0x0)  
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		met->update(d) ;
 	// Delete the definitions 
 	for (int i=0 ; i<ndef ; i++)
 		def[i]->compute_res() ;
+	lap(times_JX.defs) ;
 
 	int conte = 0 ;
 	for (int i=0 ; i<neq ; i++)  
 	    eq[i]->apply(conte, results) ;
+	lap(times_JX.eqs) ;
 	
 	if (nbr_conditions==-1) {
 		cerr << "Number of conditions unknown ; call sec_member first" << endl ;
@@ -156,12 +175,23 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 
 	for (int i=0 ; i<neq ; i++)
 	    eq[i]->export_der(conte, results, res, pos_res) ;
+	lap(times_JX.exp) ;
+	if (profile_phases)
+		times_JX.calls ++ ;
 	return res ;
 }
 
 Array<double> System_of_eqs::do_col_J (int cc) {
 
 	assert ((cc>=0) && (cc<nbr_unknowns)) ;
+	double t_phase = profile_phases ? phase_clock() : 0. ;
+	auto lap = [&](double& acc) {
+		if (profile_phases) {
+			double const now = phase_clock() ;
+			acc += now - t_phase ;
+			t_phase = now ;
+		}
+	} ;
 
 	// Affecte nterms derivatives :
 	int conte = 0 ;
@@ -209,6 +239,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 		term[i]->set_der_t(auxi + term[i]->get_der_t()) ;
 	}
 	
+	lap(times_col_J.setup) ;
 	// Metric quantities and definitions: only where they can have changed. In a domain not touched by
 	// this column every term has a zero derivative, so they keep their values with a zero derivative; if
 	// that is what they already hold (der_clean) there is nothing to recompute.
@@ -237,6 +268,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	}
 	else
 		der_clean.clear() ;
+	lap(times_col_J.defs) ;
 
 	conte = 0 ;
 	for (int i=0 ; i<neq ; i++) {
@@ -247,6 +279,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			conte += eq[i]->n_ope ;
 	}
 		
+	lap(times_col_J.eqs) ;
 	if (nbr_conditions==-1) {
 		cerr << "Number of conditions unknown ; call sec_member first" << endl ;
 		abort() ;
@@ -272,6 +305,9 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			}  
 	}
 	
+	lap(times_col_J.exp) ;
+	if (profile_phases)
+		times_col_J.calls ++ ;
 	return res ;
 }
 
