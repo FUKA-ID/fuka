@@ -45,6 +45,19 @@ they are simply a consequence of the ID solving process.
 
 # 3. Organization
 
+The solvers in `codes/FUKA`:
+
+| Solver | Initial data |
+|---|---|
+| [BH](BH/README.md) | isolated (spinning, boosted) black hole |
+| [NS](NS/README.md) | isolated non-rotating and uniformly rotating neutron star |
+| [NS_DIFFROT](NS_DIFFROT/README.md) (beta) | isolated differentially rotating neutron star (XCTS) |
+| [NS_isotropic](NS_isotropic/README.md) (beta) | rotating and differentially rotating neutron star in quasi-isotropic coordinates (2D) |
+| [BBH](BBH/README.md) | binary black hole |
+| [BNS](BNS/README.md) | binary neutron star |
+| [BHNS](BHNS/README.md) | black hole - neutron star binary |
+| `BNS_headon` (alpha) | head-on BNS and BHNS |
+
 The solvers are structured as follows:
 
 1. Each directory contains the files needed for the respective solver

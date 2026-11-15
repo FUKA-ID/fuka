@@ -28,7 +28,7 @@ since the interface is similar amongst the v2 solvers by design.
 
 1. Generate the initial config file by running `solve` for the first time
 2. Rerun (using parallelization) using this config file, e.g. `mpirun ./bin/Release/solve initial_bh.info`
-3. This will result in the generation of a pair of files containing the solution: `BH_TOTAL_BC.0.5.0.09.<info/dat>`
+3. This will result in the generation of a pair of files containing the solution: `BH_TOTAL_BC.0.5.0.0.09.<info/dat>`
 
 We can deconstruct the name to make it understandable:
 
@@ -62,12 +62,12 @@ Which results in the following:
                    Mch = +0.50000[+0.50000]
                    Chi = -0.00000[+0.00000]
 
-                 Omega = -4.47077e-17
+                 Omega = +4.18003e-15
             Komar mass = +4.97314e-01
               Adm mass = +5.00087e-01, Diff: +5.56053e-03
-           Adm moment. = -1.42076e-15
-                    Px = +2.74146e-15
-                    Py = +6.58939e-15
+           Adm moment. = -2.00002e-13
+                    Px = +6.94488e-14
+                    Py = -1.42078e-13
                     Pz = +0.00000e+00
 ```
 
@@ -227,24 +227,24 @@ We can of course verify that the ID matches our expectation using
 
 ```
                    RES = [+11,+11,+10]
-            Coord R_IN = +0.41623
-               Coord R = +0.52812
-           Coord R_OUT = +3.32986
+            Coord R_IN = +0.32502
+               Coord R = +0.54163
+           Coord R_OUT = +2.60012
 
-               Areal R = +1.74745
-                 LAPSE = [+0.27855, +0.31909]
-                   PSI = [+1.76822, +1.84611]
+               Areal R = +1.75647
+                 LAPSE = [+0.28547, +0.32448]
+                   PSI = [+1.75317, +1.82613]
 
-                  Mirr = +0.87372[+0.87372]
+                  Mirr = +0.87823[+0.87823]
                    Mch = +1.00000[+1.00000]
-                   Chi = +0.85000[+0.85000]
+                   Chi = +0.84000[+0.84000]
 
-                 Omega = -3.11500e-01
-            Komar mass = +1.00013e+00
-              Adm mass = +1.00802e+00, Diff: +7.85280e-03
-           Adm moment. = +8.50171e-01
-                    Px = -2.42573e-14
-                    Py = +2.09780e-14
+                 Omega = -3.03075e-01
+            Komar mass = +1.00517e+00
+              Adm mass = +1.00629e+00, Diff: +1.11392e-03
+           Adm moment. = +8.39740e-01
+                    Px = +3.66017e-14
+                    Py = -1.77337e-14
                     Pz = +0.00000e+00
 ```
 

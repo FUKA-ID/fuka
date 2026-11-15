@@ -55,7 +55,7 @@ The default configuration for BNS has a total mass of 2.8M and non-spinning.
 Aside from the diagnostics observed during the solver stage, we can use the reader
 to verify the ID.  This can be done by running:
 
-`./bin/Release/reader BNS_ECC_RED.togashi.28.0.0.2.8.q1.0.0.09.info`
+`./bin/Release/reader BNS_ECC_RED.togashi.30.2.0.0.2.8.q1.0.0.09.info`
 
 Which results in the following:
 
@@ -63,7 +63,7 @@ Which results in the following:
 ###################### NS_MINUS ######################
             Center_COM = (-15.10000, 0, 0)
             Coord R_IN = +3.16650
-               Coord R = [+5.95742,+6.12771] ([+8.79910,+9.05063] km)
+               Coord R = [+5.95741,+6.12772] ([+8.79910,+9.05064] km)
            Coord R_OUT = +9.25533
                Areal R = +7.79075 [+11.50693km]
          Baryonic Mass = +1.55245 (+0.52510,+1.02735,)
@@ -76,29 +76,46 @@ Which results in the following:
        Central Density = +1.37420e-03
         Central log(h) = +2.31775e-01
       Central Pressure = +2.34365e-04
-    Central dlog(h)/dx = -1.47604e-15
+    Central dlog(h)/dx = -2.32441e-19
 Central Euler Constant = -0.28321
-     Integrated log(h) = +186.21313
+     Integrated log(h) = +186.21312
 
 ###################### NS_PLUS ######################
             Center_COM = (+15.10000, 0, 0)
+            Coord R_IN = +3.16650
+               Coord R = [+5.95741,+6.12772] ([+8.79910,+9.05064] km)
+           Coord R_OUT = +9.25533
+               Areal R = +7.79075 [+11.50693km]
+         Baryonic Mass = +1.55245 (+0.52510,+1.02735,)
+     Isolated ADM Mass = +1.40000
+      Quasi-local Madm = +1.37746 Diff:+0.01610
+         Quasi-local S = -0.00000
+                   Chi = -0.00000 [+0.00000]
+                 Omega = +0.00004
+       x(max(Density)) = +15.10000 (+0.00000)
+       Central Density = +1.37420e-03
+        Central log(h) = +2.31775e-01
+      Central Pressure = +2.34365e-04
+    Central dlog(h)/dx = +3.01759e-19
+Central Euler Constant = -0.28321
+     Integrated log(h) = +186.21312
 
 ###################### Binary ######################
                    RES = [+9,+9,+8]
                      Q = +1.00000
             Separation = +30.20 [+10.79] (+44.61km)
          Orbital Omega = +0.00901
-            Komar mass = +2.77629
-              Adm mass = +2.77332, Diff: +0.00054
+            Komar mass = +2.77612
+              Adm mass = +2.77327, Diff: +0.00051
      Total mass (Minf) = +2.80000
-           Adm moment. = +7.75714
-        Binding energy = -2.66830e-02
+           Adm moment. = +7.75709
+        Binding energy = -2.67296e-02
             Minf * Ome = +2.52151e-02
-            E_b / Minf = -9.52965e-03
-               ADM P_x = +1.66693e-15
-               ADM P_y = -3.49828e-14
+            E_b / Minf = -9.54627e-03
+               ADM P_x = +1.20943e-14
+               ADM P_y = +2.02351e-14
                ADM P_z = +0.00000e+00
-                  COMx = -0.00000, A-COMx = +0.00000
+                  COMx = +0.00000, A-COMx = +0.00000
                   COMy = -0.00000, A-COMy = -0.00000
                 A-COMz = +0.00000
 ```
@@ -282,7 +299,7 @@ In the event you changed the resolution to 11pts, the solver will solve the bina
 solution in hydrostatic equilibrium has been obtained.  At this point the solution will be regridded to a higher resolution
 at which point the solver will go through all the activated stages (e.g. `TOTAL`, `TOTAL_BC`, and `ECC_RED`).
 
-This results in the converged dataset of `BNS_ECC_RED.togashi.28.0.52.0.3.6.q0.487603.0.0.11.info/dat`, however, the other implicit solutions have been saved as well:
+This results in the converged dataset of `BNS_ECC_RED.togashi.30.2.0.0.52.3.6.q0.487603.0.0.11.info/dat`, however, the other implicit solutions have been saved as well:
 
 1. `BNS_TOTAL_FIXED_OMEGA.`: is the initial solution after the import of the two isolated solutions have been solved in the binary space for a fixed COM and orbital frequency.  The hydro fields are simply rescaled to enforce the
 specified baryonic mass, but the fluid is not in hydrostatic equilibrium
@@ -292,66 +309,66 @@ specified baryonic mass, but the fluid is not in hydrostatic equilibrium
 
 We can of course verify that the ID matches our expectation using
 
-`./bin/Release/reader BNS_ECC_RED.togashi.30.2.0.0.52.3.6.q0.487603.0.0.09.info`
+`./bin/Release/reader BNS_ECC_RED.togashi.30.2.0.0.52.3.6.q0.487603.0.0.11.info`
 
 ```
 ###################### NS_MINUS ######################
-            Center_COM = (-20.30783, 0, 0)
-            Coord R_IN = +2.92677
-               Coord R = [+5.86277,+6.23056] ([+8.65931,+9.20253] km)
-           Coord R_OUT = +9.18135
-               Areal R = +7.74374 [+11.43749km]
-         Baryonic Mass = +1.28557 (+0.35930,+0.92627,)
+            Center_COM = (-20.29746, 0, 0)
+            Coord R_IN = +1.84533
+               Coord R = [+5.86039,+6.22656] ([+8.65580,+9.19663] km)
+           Coord R_OUT = +8.20506
+               Areal R = +7.74214 [+11.43514km]
+         Baryonic Mass = +1.28557 (+0.10266,+1.18291,)
      Isolated ADM Mass = +1.18000
-      Quasi-local Madm = +1.15484 Diff:+0.02132
+      Quasi-local Madm = +1.15657 Diff:+0.01986
          Quasi-local S = +0.00000
                    Chi = +0.00000 [+0.00000]
                  Omega = +0.00009
        x(max(Density)) = -15.10000 (-0.00000)
-       Central Density = +1.21999e-03
-        Central log(h) = +1.83561e-01
-      Central Pressure = +1.57389e-04
-    Central dlog(h)/dx = -3.15240e-15
-Central Euler Constant = -0.29321
-     Integrated log(h) = +141.79257
+       Central Density = +1.22100e-03
+        Central log(h) = +1.83859e-01
+      Central Pressure = +1.57826e-04
+    Central dlog(h)/dx = -1.74258e-19
+Central Euler Constant = -0.29357
+     Integrated log(h) = +142.05851
 
 ###################### NS_PLUS ######################
-            Center_COM = (+9.89217, 0, 0)
-            Coord R_IN = +1.84540
-               Coord R = [+3.74359,+4.72747] ([+5.52927,+6.98247] km)
-           Coord R_OUT = +9.18135
-               Areal R = +7.26853 [+10.73561km]
-         Baryonic Mass = +2.90865 (+0.76084,+2.14781,)
+            Center_COM = (+9.90254, 0, 0)
+            Coord R_IN = +1.84533
+               Coord R = [+3.74326,+4.72715] ([+5.52879,+6.98200] km)
+           Coord R_OUT = +8.20506
+               Areal R = +7.26842 [+10.73546km]
+         Baryonic Mass = +2.90866 (+0.76095,+2.14771,)
      Isolated ADM Mass = +2.42000
-      Quasi-local Madm = +2.34788 Diff:+0.02980
+      Quasi-local Madm = +2.34782 Diff:+0.02983
          Quasi-local S = +3.04533
                    Chi = +0.52000 [+0.52000]
                  Omega = +0.05322
        x(max(Density)) = +15.10000 (+0.00000)
-       Central Density = +2.61935e-03
-        Central log(h) = +7.26368e-01
-      Central Pressure = +1.90354e-03
-    Central dlog(h)/dx = +2.69895e-16
-Central Euler Constant = -0.63950
-     Integrated log(h) = +528.04576
+       Central Density = +2.61946e-03
+        Central log(h) = +7.26412e-01
+      Central Pressure = +1.90378e-03
+    Central dlog(h)/dx = -3.94626e-20
+Central Euler Constant = -0.63959
+     Integrated log(h) = +528.05956
 
 ###################### Binary ######################
                    RES = [+11,+11,+10]
                      Q = +0.48760
             Separation = +30.20 [+8.39] (+44.61km)
          Orbital Omega = +0.00987
-            Komar mass = +3.56185
-              Adm mass = +3.56308, Diff: +0.00017
+            Komar mass = +3.56350
+              Adm mass = +3.56482, Diff: +0.00018
      Total mass (Minf) = +3.60000
-           Adm moment. = +13.27755
-        Binding energy = -3.69245e-02
-            Minf * Ome = +3.55439e-02
-            E_b / Minf = -1.02568e-02
-               ADM P_x = +1.42836e-14
-               ADM P_y = +9.95651e-14
+           Adm moment. = +13.29001
+        Binding energy = -3.51836e-02
+            Minf * Ome = +3.55438e-02
+            E_b / Minf = -9.77322e-03
+               ADM P_x = -5.92136e-15
+               ADM P_y = +2.77007e-13
                ADM P_z = +0.00000e+00
-                  COMx = -5.20783, A-COMx = +5.21458
-                  COMy = +0.05642, A-COMy = +0.00036
+                  COMx = -5.19746, A-COMx = +5.20444
+                  COMy = +0.05628, A-COMy = +0.00040
                 A-COMz = +0.00000
 ```
 

@@ -32,7 +32,7 @@ where plus and minus simply refer to their location on the x-axis.**
 
 1. Generate the initial config file by running `solve` for the first time
 2. Rerun (using parallelization) using this config file, e.g. `mpirun ./bin/Release/solve initial_bhns.info`
-3. This will result in the generation of a pair of files containing the solution: `BHNS_ECC_RED.togashi.35.0.0.2.8.q1.0.0.09.<info/dat>`
+3. This will result in the generation of a pair of files containing the solution: `BHNS_ECC_RED.togashi.35.0.0.2.8.q1.0.2.09.<info/dat>`
 
 **Note: In the event you have learned about generating FUKAv2 ID in the recommended order as discussed in the
 [FUKAv2 README](../README.md) and
@@ -49,7 +49,7 @@ are saved to file during each iteration of the solver
 - `35`: separation distance in geometric units!
 - `0.0.`: In this case, both objects are not spinning
 - `2.8.q1`: the total mass is `2.8` with mass ratio `1`
-- `0.0.09`: `nshells = 0` for `ns1`, `nshells = 0` for `bh2` where the resolution in each domain is `9` collocation points in the radial and theta direction with `8` points in the phi direction
+- `0.2.09`: `nshells = 0` for `ns1`, `nshells = 2` for `bh2` (chosen automatically) where the resolution in each domain is `9` collocation points in the radial and theta direction with `8` points in the phi direction
 - `info`: The info file contains all the steering parameters, values used in creating the domain decomposition, stored fields, stages, settings, and controls
 - `dat`: The dat file is a binary file that contains the numerical space and the variable fields
 
@@ -63,30 +63,32 @@ Which results in the following:
 
 ```
 ###################### Neutron Star ######################
-            Center_COM = (-17.49030, 0, 0)
+            Center_COM = (-17.49047, 0, 0)
             Coord R_IN = +3.17083
-               Coord R = [+6.01367,+6.13650] ([+8.88219,+9.06360] km)
+               Coord R = [+6.01366,+6.13651] ([+8.88217,+9.06363] km)
            Coord R_OUT = +10.05533
                Areal R = +7.79369 [+11.51127km]
-                 NS Mb = +1.55246 (+0.51779,+1.03467,)
+     Circumferential R = +7.90919e+00 [+1.16819e+01km]
+         Mass Shedding = +9.70740e-01
+                 NS Mb = +1.55245 (+0.51779,+1.03467,)
      Isolated ADM Mass = +1.40000
-      Quasi-local Madm = +1.38019 Diff:+0.01415
+      Quasi-local Madm = +1.38018 Diff:+0.01416
          Quasi-local S = -0.00000
                    Chi = -0.00000 [+0.00000]
                  Omega = +0.00003
              Local P_y = -0.07270
              Local P_x = +0.00864
-       Central Density = +1.37443e-03
-        Central log(h) = +2.31851e-01
-      Central Pressure = +2.34496e-04
-    Central dlog(h)/dx = +9.74512e-17
-Central Euler Constant = +7.60026e-01
-     Integrated log(h) = +186.24633
+       Central Density = +1.37442e-03
+        Central log(h) = +2.31849e-01
+      Central Pressure = +2.34492e-04
+    Central dlog(h)/dx = -1.06690e-19
+Central Euler Constant = +7.60029e-01
+     Integrated log(h) = +186.24450
 
 ###################### Black Hole ######################
-            Center_COM = (+17.50970, 0, 0)
+            Center_COM = (+17.50953, 0, 0)
             Coord R_IN = +0.58273
-               Coord R = +1.15113 [+1.70022km]
+               Coord R = +1.15114 [+1.70023km]
                 SHELL1 = +2.67859
                 SHELL2 = +4.98071
            Coord R_OUT = +10.05533
@@ -106,18 +108,18 @@ Central Euler Constant = +7.60026e-01
                      Q = +1.00000
             Separation = +35.00 [+12.50] (+51.69km)
          Orbital Omega = +0.00732
-            Komar mass = +2.77807
-              Adm mass = +2.77624, Diff: +0.00066
+            Komar mass = +2.77793
+              Adm mass = +2.77619, Diff: +0.00063
             Total Mass = +2.80000 [+2.80000]
-           Adm moment. = +8.13653
-        Binding energy = -0.02376
+           Adm moment. = +8.13643
+        Binding energy = -0.02381
             Minf * Ome = +0.02051
-            E_b / Minf = -0.00849
-               ADM P_x = +6.29424e-16
-               ADM P_y = -3.37719e-17
+            E_b / Minf = -0.00850
+               ADM P_x = +2.47860e-16
+               ADM P_y = +1.43181e-15
                ADM P_z = +0.00000e+00
-                  COMx = +0.00970, A-COMx = +0.00086
-                  COMy = -0.06490, A-COMy = -0.06541
+                  COMx = +0.00953, A-COMx = +0.00081
+                  COMy = -0.06490, A-COMy = -0.06540
                 A-COMz = +0.00000
 ```
 
@@ -295,7 +297,7 @@ Now that you've generated the simplest case and we have a better understanding o
 This time around we see the iterative `chi` increase being done for the NS and BH, but overall the only changes
 observed are related to the isolated solvers.  The binary solver itself is consistent.
 
-This results in the converged dataset of `BHNS_ECC_RED.togashi.35.0.0.52.3.6.q0.487603.0.3.11.info/dat`, however, the other implicit solutions have been saved as well:
+This results in the converged dataset of `BHNS_ECC_RED.togashi.35.0.0.52.3.6.q0.487603.0.1.11.info/dat`, however, the other implicit solutions have been saved as well:
 
 1. `BHNS_TOTAL_BC_FIXED_OMEGA.`: is the initial solution after the import of the two isolated solutions have been solved in the binary space for a fixed COM and orbital frequency.
 The hydro fields are simply rescaled to enforce the
@@ -310,13 +312,13 @@ We can of course verify that the ID matches our expectation using
 ```
 ###################### Neutron Star ######################
             Center_COM = (-23.58367, 0, 0)
-            Coord R_IN = +2.97659
-               Coord R = [+5.96195,+6.22697] ([+8.80580,+9.19723] km)
-           Coord R_OUT = +9.98108
+            Coord R_IN = +2.97660
+               Coord R = [+5.96194,+6.22697] ([+8.80578,+9.19723] km)
+           Coord R_OUT = +9.98109
                Areal R = +7.74450 [+11.43862km]
      Circumferential R = +7.98989e+00 [+1.18011e+01km]
          Mass Shedding = +9.33739e-01
-                 NS Mb = +1.28557 (+0.36424,+0.92132,)
+                 NS Mb = +1.28557 (+0.36425,+0.92132,)
      Isolated ADM Mass = +1.18000
       Quasi-local Madm = +1.15772 Diff:+0.01889
          Quasi-local S = +0.00000
@@ -327,16 +329,16 @@ We can of course verify that the ID matches our expectation using
        Central Density = +1.22236e-03
         Central log(h) = +1.84261e-01
       Central Pressure = +1.58415e-04
-    Central dlog(h)/dx = -9.72895e-16
+    Central dlog(h)/dx = +8.07874e-22
 Central Euler Constant = +7.57844e-01
-     Integrated log(h) = +141.97207
+     Integrated log(h) = +141.97212
 
 ###################### Black Hole ######################
             Center_COM = (+11.41633, 0, 0)
-            Coord R_IN = +0.94392
+            Coord R_IN = +0.94393
                Coord R = +1.79588 [+2.65251km]
                 SHELL1 = +3.79279
-           Coord R_OUT = +9.98108
+           Coord R_OUT = +9.98109
                Areal R = +4.66020 [+6.88312km]
                 LAPSE = [+0.37045, +0.39455]
                   PSI = [+1.60049, +1.62200]
@@ -354,17 +356,17 @@ Central Euler Constant = +7.57844e-01
             Separation = +35.00 [+9.72] (+51.69km)
          Orbital Omega = +0.00807
             Komar mass = +3.57132
-              Adm mass = +3.56820, Diff: +0.00087
+              Adm mass = +3.56819, Diff: +0.00088
             Total Mass = +3.60000 [+3.60000]
-           Adm moment. = +13.79013
-        Binding energy = -0.03180
+           Adm moment. = +13.79017
+        Binding energy = -0.03181
             Minf * Ome = +0.02906
-            E_b / Minf = -0.00883
-               ADM P_x = -2.46869e-14
-               ADM P_y = -4.05044e-15
+            E_b / Minf = -0.00884
+               ADM P_x = -1.01529e-14
+               ADM P_y = +5.15238e-15
                ADM P_z = +0.00000e+00
-                  COMx = -6.08367, A-COMx = -6.05686
-                  COMy = -0.03283, A-COMy = -0.10290
+                  COMx = -6.08367, A-COMx = -6.05688
+                  COMy = -0.03278, A-COMy = -0.10290
                 A-COMz = +0.00000
 ```
 
