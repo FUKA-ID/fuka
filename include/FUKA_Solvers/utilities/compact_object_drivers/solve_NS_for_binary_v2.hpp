@@ -37,6 +37,9 @@ std::string solve_NS_for_binary_v2(config_t& bconfig, const NODES bco) {
 
     for (auto i : CONTROLS_ARY)
         nsconfig.control(i) = bconfig.control(i);
+    // The companion stars are always built with the 3D XCTS solver: the quasi-isotropic (NS_isotropic) initial
+    // guess is only meant for isolated, strongly deformed stars (NS_DIFFROT).
+    nsconfig.control(CONTROLS::USE_ISO_SOLVER) = false;
 
     for (int i = 0; i < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++i)
         nsconfig.seq_setting(i) = bconfig.seq_setting(i);
