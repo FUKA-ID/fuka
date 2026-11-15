@@ -147,6 +147,12 @@ class System_of_eqs {
 	int prune_skip_dom[2] = {-1, -1} ; ///< Domains without pruning in this column (moving variable domains).
 	long column_stamp = 0 ; ///< Incremented by every do_col_J (validity of Ope_eq::der_is_zero).
 	long field_generation = 0 ; ///< Incremented when the fields are copied to the terms (cache validity).
+	/// do_col_J gives a derivative only to the term holding the column's coefficient, instead of building one for
+	/// every term to count the coefficients (same results). The coefficient range of each term is counted once
+	/// per \c field_generation.
+	bool fast_column_setup = true ;
+	std::vector<int> term_coef_end ; ///< For term i: one past its last coefficient (column index).
+	long term_coef_generation = -1 ; ///< \c field_generation of \c term_coef_end.
 	/// @return true if the metric is flat (its derivative is always zero).
 	bool has_flat_metric () const ;
 	/// Wall time spent in the phases of do_col_J / do_JX, accumulated while \c profile_phases is set.

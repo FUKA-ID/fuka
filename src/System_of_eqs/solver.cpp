@@ -268,7 +268,25 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	}
 
 	// Fields
+	// Terms that do not hold coefficient cc keep the derivative they have (zero or from the variable domains).
+	bool const fast = fast_column_setup ;
+	if (fast && ((term_coef_generation!=field_generation) || (static_cast<int>(term_coef_end.size())!=nterm))) {
+		term_coef_end.resize(nterm) ;
+		int count = conte ;
+		for (int i=0 ; i<nterm ; i++) {
+			Tensor auxi (term[i]->get_val_t(), false) ;
+			espace.get_domain(term[i]->get_dom())->affecte_tau_one_coef(auxi, term[i]->get_dom(), -1, count) ;
+			term_coef_end[i] = count ;
+		}
+		term_coef_generation = field_generation ;
+	}
 	for (int i=0 ; i<nterm ; i++) {
+		if (fast) {
+			int const begin = (i==0) ? conte : term_coef_end[i-1] ;
+			if ((cc<begin) || (cc>=term_coef_end[i]))
+				continue ;
+			conte = begin ;
+		}
 		int dom = term[i]->get_dom() ;
 		Tensor auxi (term[i]->get_val_t(), false) ;
 		espace.get_domain(dom)->affecte_tau_one_coef(auxi, dom, cc, conte) ;

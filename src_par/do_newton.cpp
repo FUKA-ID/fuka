@@ -978,6 +978,8 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 	syst.prune_zero_derivatives = env_on_root("KADATH_JACOBIAN_PRUNE", "1") == "1";
 	// KADATH_JACOBIAN_LINEAR=0: linear nodes with a non-zero derivative recompute their value too.
 	syst.prune_linear = env_on_root("KADATH_JACOBIAN_LINEAR", "1") == "1";
+	// KADATH_JACOBIAN_FAST_SETUP=0: do_col_J builds the derivative of every term to locate the column.
+	syst.fast_column_setup = env_on_root("KADATH_JACOBIAN_FAST_SETUP", "1") == "1";
 	syst.profile_phases = env_on_root("KADATH_NEWTON_PROFILE", "0") != "0";  // 2: phases only, no extra probes
 
 	Array<double> X (syst.get_nbr_unknowns());

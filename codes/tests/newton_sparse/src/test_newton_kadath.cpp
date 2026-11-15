@@ -211,7 +211,8 @@ void test_jacobian_columns() {
 /// T3d: do_col_J with skip_clean_domains (definitions and metric recomputed only in touched domains) and
 /// pruned zero-derivative subtrees must be bitwise identical to recomputing everything, for columns visited in a
 /// scrambled order with do_JX and sec_member calls in between (they invalidate the tracked state). With
-/// prune_linear (linear nodes apply themselves to the derivatives only) the columns agree to round-off.
+/// prune_linear (linear nodes apply themselves to the derivatives only) the columns agree to round-off. Both
+/// passes use fast_column_setup (only the term holding the coefficient gets a derivative); the reference does not.
 void check_skip_clean(System_of_eqs& syst, std::string const& label) {
     int const n = syst.get_nbr_unknowns();
     std::vector<int> columns;
@@ -222,6 +223,7 @@ void check_skip_clean(System_of_eqs& syst, std::string const& label) {
     syst.skip_clean_domains = false;
     syst.prune_zero_derivatives = false;
     syst.prune_linear = false;
+    syst.fast_column_setup = false;
     syst.sec_member();
     std::vector<Array<double>> reference;
     for (int c : columns)
@@ -231,6 +233,7 @@ void check_skip_clean(System_of_eqs& syst, std::string const& label) {
         syst.skip_clean_domains = true;
         syst.prune_zero_derivatives = true;
         syst.prune_linear = linear;
+        syst.fast_column_setup = true;
         syst.sec_member();
         bool same = true;
         double worst = 0.;
