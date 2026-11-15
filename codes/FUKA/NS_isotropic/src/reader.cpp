@@ -162,9 +162,8 @@ void reader_2d_diffrot(config_t bconfig) {
             case 0:
             case 1:
                 // sources rescaled by p/rho as in Papenfort2021
-                syst.add_def(
-                    d,
-                    "E = Wsq * (press * h - Wsq * press * delta / Wsq)");
+                // as in the solver (ns_isotropic_*_stages.cpp): E = delta * (rho h W^2 - p)
+                syst.add_def(d, "E = Wsq * press * h - press * delta");
                 syst.add_def(d, "Srrtt = press * delta");
                 syst.add_def(d, "Spp = delta * press * (1 + Usq) + E * Usq");
                 syst.add_def(d, "S = 2 * Srrtt + Spp");
@@ -194,12 +193,6 @@ void reader_2d_diffrot(config_t bconfig) {
                 // first integral of the euler equation for a static, non-rotating star, i.e. a TOV
                 syst.add_def(d, "firstint = H + log(N) - 0.5 * log(Wsq)");
 
-                syst.add_def(
-                    d,
-                    "GRV2 = divrsint(2 * 4piG * A^2 * Spp"
-                    " + delta * 3 * multrsint(multrsint(B^2)) / 4 / N^2 * "
-                    "scal(grad(w), grad(w))"
-                    " - delta * scal(grad(nu), grad(nu))) / 2");
 
                 // syst.add_def(d, "lam3 = 4piG * (3 * press + (edens + press) * Usq * Wsq) * A^2 * B");
                 break;
@@ -208,10 +201,6 @@ void reader_2d_diffrot(config_t bconfig) {
                 // syst.add_def(d, "eqnu = lap(nu) + scal(grad(nu), grad(lapAterm))") ;
                 syst.add_def(d, "DDA = -delta * scal(grad(nu), grad(nu))");
                 syst.add_def(d, "intDDA = - lap2(A) * 2 / 4piG");
-                syst.add_def(
-                    d,
-                    "GRV2 = divrsint(3 * multrsint(multrsint(B^2)) / 4 / N^2 * "
-                    "scal(grad(w), grad(w)) - scal(grad(nu), grad(nu))) / 2");
                 break;
         }
     }
@@ -237,9 +226,6 @@ void reader_2d_diffrot(config_t bconfig) {
     Scalar intMb(syst.give_val_def("intMb")());
     intMb.coef_i();
 
-    double GRV2 = 0;
-    Scalar intGRV2(syst.give_val_def("GRV2")());
-    intGRV2.coef_i();
 
     double T_integral = 0.0;
     Scalar Tint = syst.give_val_def("intT")();
@@ -265,20 +251,16 @@ void reader_2d_diffrot(config_t bconfig) {
         // that we can assert that P/rho on the boundary is zero
         Val_domain J(intJV(i));
         Val_domain Porho(P_o_rho(i));
-        Val_domain GRV2_vd(intGRV2(i));
 
         Index pos(space.get_domain(i)->get_nbr_points());
         Val_domain J_o_Porho(J);
         do {
             double j = J(pos);
             double porho = Porho(pos);
-            double grv2_val = GRV2_vd(pos);
             if (std::fabs(porho) <= 1e-15) {
                 J_o_Porho.set(pos) = 0.;
-                // GRV2_vd.set(pos) = 0.;
             } else {
                 J_o_Porho.set(pos) = j / porho;
-                // GRV2_vd.set(pos) = grv2_val / porho;
             }
         } while (pos.inc());
         VJadm += J_o_Porho.integ_volume();
@@ -286,19 +268,8 @@ void reader_2d_diffrot(config_t bconfig) {
         T_integral += Tint(i).integ_volume();
         J_vintegral += Jvol(i).integ_volume();
         eps_integral += epsint(i).integ_volume();
-        double tmp = GRV2_vd.integ_volume();
-        cout << i << ": " << tmp << '\n';
-        GRV2 += tmp;
     }
 
-    intGRV2.coef_i();
-    for (int i = 2; i < ndom; ++i) {
-        auto tmp = intGRV2(i).integ_volume();
-        cout << i << ": " << tmp << '\n';
-        GRV2 += tmp;
-    }
-
-    cout << "GRV2: " << GRV2 << '\n';
     // cout << "LAM3: " << LAM3 << '\n';
 
     Val_domain integMadm(syst.give_val_def("intMadmFULL")()(ndom - 1));
@@ -497,9 +468,6 @@ void reader_2d_norot(config_t bconfig) {
                 // first integral of the euler equation for a static, non-rotating star, i.e. a TOV
                 syst.add_def(d, "firstint = H + log(N)");
 
-                syst.add_def(d,
-                             "GRV2 = divrsint(2 * 4piG * A^2 * Spp"
-                             " - delta * scal(grad(nu), grad(nu))) / 2");
 
                 break;
             // outside the matter is absent and the sources are zero
@@ -507,8 +475,6 @@ void reader_2d_norot(config_t bconfig) {
                 syst.add_eq_full(d, "H = 0");
                 syst.add_def(d, "DDA = -delta * scal(grad(nu), grad(nu))");
                 syst.add_def(d, "intDDA = - lap2(A) * 2 / 4piG");
-                syst.add_def(d,
-                             "GRV2 = divrsint(scal(grad(nu), grad(nu))) / 2");
 
                 syst.add_def(d,
                              "eqnu = lap(nu) + scal(grad(nu), grad(lapAterm))");

@@ -18,6 +18,16 @@
   derivative only), and `do_JX` uses the same shortcuts.
 * The peak memory (VmHWM per rank, per node and in total) is printed after every Newton step.
 * Tests of the sparse solvers: `codes/tests/newton_sparse` (see its README).
+### Changes
+* `NS_isotropic` reader: the GRV2 virial identity is no longer printed. Its integrand mixed the p/rho
+  rescaled matter sources with unrescaled field terms, and the 1/(r sin(theta)) weight was applied by a
+  spectral division that is not valid for terms that do not vanish on the axis, so the printed value
+  was not the GRV2 residual (it stayed at O(1) for converged solutions at every resolution). A correct
+  GRV2 needs a direct (r, theta) quadrature.
+* `NS_isotropic` reader: the energy density used for the angular momentum volume integral now matches
+  the solver (`E = W^2 p h - p delta` in the p/rho rescaled variables).
+* Documentation: READMEs for `NS_DIFFROT` (differentially rotating stars, KEH law) and `NS_isotropic`;
+  the example outputs of the solver READMEs were regenerated.
 
 ## v2.4.5
 ### Bug Fixes

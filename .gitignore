@@ -19,6 +19,7 @@ codes/**
 !codes/**/*.hpp
 !codes/**/CMakeLists.txt
 !codes/**/*.py
+!codes/**/README.md
 
 # keep build output ignored
 codes/**/build/**

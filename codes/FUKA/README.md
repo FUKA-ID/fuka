@@ -89,6 +89,10 @@ Newton step with a sparse Jacobian; nothing needs to be configured. `KADATH_LINS
 | `mumps` | exact sparse Newton step every iteration | when Newton-Krylov struggles (it re-assembles the Jacobian every step, about twice as slow) |
 | `scalapack` (default without MUMPS) | dense LU, the solver of FUKA <= v2.4 | small systems; memory grows as the square of the number of unknowns |
 
+The three are alternatives for the same Newton iteration and give the same solution to the requested
+`solver_precision`; only one is used per run (e.g. `export KADATH_LINSOLVE=mumps` before `mpirun`). Use the
+default unless a run fails to converge.
+
 ## Memory
 
 The memory of a run is the sum of two parts:
