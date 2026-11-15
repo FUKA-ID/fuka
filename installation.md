@@ -54,6 +54,10 @@ of the nodes. Without MUMPS, FUKA builds and runs exactly as before (dense ScaLA
      factors.
    - MUMPS itself keeps its default 32-bit integers (`~int64`): it reads the index width of METIS from
      `IDXTYPEWIDTH` in `metis.h` and that of Scotch from `scotch.h`, and calls them accordingly.
+   - Cost: with 64-bit indices the sequential analysis needs more memory on rank 0, about 7.5 bytes more per
+     graph entry, and the ordering takes about 35 % longer. Measured on the same 2.0e9-entry graph: rank 0 peaks
+     at 10 GB with 32-bit and 25 GB with 64-bit METIS; the other ranks are unchanged. Size the first node
+     accordingly.
    - PT-Scotch (`+ptscotch`) is optional. It makes a second parallel ordering available besides ParMETIS.
    - Check: `codes/tests/newton_sparse/bin/Release/test_ordering_int64` prints the index widths MUMPS uses
      and fails if they are not 64-bit (see `codes/tests/newton_sparse/README.md`).
