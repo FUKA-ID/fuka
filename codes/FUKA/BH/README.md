@@ -107,7 +107,7 @@ Note:
 
 Using your favorite text editor, you can open up the `initial_bh.info`.  We will go through the file,
 but we'll discuss only the details relevant to the BH case.  For details on all the parameters you can
-see more in [Configurator README](https://bitbucket.org/fukaws/fuka/src/fuka/include/Configurator/).
+see more in [Configurator README](../../../include/Configurator/).
 
 <b>
 Notes: 

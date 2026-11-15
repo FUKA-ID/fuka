@@ -17,6 +17,19 @@ Included are the Frankfurt initial data solvers and utilities based on the Kadat
   The `GRHayL` can be found [here](https://github.com/GRHayL/GRHayL) and needs to be installed separately before
   compiling the Kadath library and, after, the FUKA codes.
 
+## FUKAv2.5 Notes:
+1. Sparse Newton solvers. When FUKA is built with [MUMPS](https://mumps-solver.org) (see
+   [installation](installation.md)), every Newton step uses a sparse Jacobian and, by default,
+   Newton-Krylov (GMRES preconditioned by MUMPS factors) instead of the dense ScaLAPACK solve.
+    * Memory no longer grows with the square of the number of unknowns: the default BBH and BNS
+      cases run on 2 nodes instead of 10, 3-6 times faster, with the same solutions.
+    * Nothing changes for users: config files, stages and outputs are the same.
+    * `KADATH_LINSOLVE=krylov|mumps|scalapack` chooses the solver at run time (default `krylov`
+      with MUMPS, `scalapack` without).
+2. The Jacobian assembly is faster for all solvers (also with ScaLAPACK).
+3. The peak memory per rank, per node and in total is printed after every Newton step, which
+   helps to size runs.
+
 ## FUKAv2.4 Notes:
 1. The solution INFO file for new solutions now contains a `metadata`
    section which includes
@@ -151,6 +164,9 @@ https://bitbucket.org/fukaws/
       - Path to the MPI C wrapper (when not automatically detected by cmake)
     - (optional) `-DDEFAULT_KAD_MEM`
       - Deactivate memory pools to allow for thread-safe exporters.  ***Do not use with ID solvers!***
+    - (optional) `-DMUMPS=ON/OFF (ON)`
+      - Use the MUMPS sparse Newton solvers when the environment variable `MUMPS_ROOT` (and `METIS_ROOT`,
+        `PARMETIS_ROOT`) points to a MUMPS installation; see [installation](installation.md).
     - (optional) `-DGRHAYL_EOS=ON`
       - Enable support for stellar collapse tables using the GRHayLEOS library.
       - GRHayL must be installed separately by the user
@@ -177,7 +193,7 @@ Run the compile script within the `build_release` directory using
 in order to build the library.
 
 ## Compiling FUKA solvers
-The above mentioned [compile script](https://github.com/samueltootle/fuka/tree/fuka/build_release/compile) has been added as a symbolic link to the FUKAv1 and FUKAv2 solver directories for convenience to compile the individual solvers.
+The above mentioned [compile script](https://github.com/samueltootle/fuka/tree/fuka/build_release/compile) has been added as a symbolic link to the solver directories in `codes/FUKA` for convenience to compile the individual solvers.
 
 # 5. Dependencies
 
@@ -190,6 +206,7 @@ The above mentioned [compile script](https://github.com/samueltootle/fuka/tree/f
 5. GSL
 6. scaLAPACK
 7. MPI
-8. Boost
-9. Boost::python (to compile [PythonTools](https://github.com/samueltootle/fuka/tree/fuka/codes/PythonTools/))
-10. (optional) [GRHayL](https://github.com/GRHayL/GRHayL)
+8. (recommended) [MUMPS](https://mumps-solver.org) 5.x with METIS and ParMETIS, for the sparse Newton solvers
+9. Boost
+10. Boost::python (to compile [PythonTools](https://github.com/samueltootle/fuka/tree/fuka/codes/PythonTools/))
+11. (optional) [GRHayL](https://github.com/GRHayL/GRHayL)

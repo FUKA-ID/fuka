@@ -64,7 +64,7 @@ class Ope_eq : public MemoryMappable {
 
 		/**
 		* Computes the action of the current \c Ope_eq using its various parts.
-		* In a Jacobian column (System_of_eqs::prune_active) a subtree whose derivative is zero is not
+		* In a Jacobian column or product (System_of_eqs::prune_active: do_col_J, do_JX) a subtree whose derivative is zero is not
 		* recomputed: its result (the current value with a zero derivative) is taken from a cache valid as long
 		* as the fields are unchanged (System_of_eqs::field_generation).
 		* @return the \c Term_eq containing the result.

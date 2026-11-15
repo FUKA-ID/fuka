@@ -99,7 +99,7 @@ Which results in the following:
 ```
 
 The first two blocks contain information related to the component BHs.  These details are covered in the
-[BH README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/BH/).
+[BH README](../BH/README.md).
 The only additional parameter is the `Center_COM`.  This is the coordinate center of each object when shifted by the
 "center-of-mass" of the binary or, more specifically, the location of the axis of rotation for the binary that can approximate
 a quasi-stationary solution.
@@ -121,7 +121,7 @@ The third block contains information specifically related to the binary
 
 Using your favorite text editor, you can open up the `initial_bbh.info`.  We will go through the file,
 but we'll discuss only the details relevant to the BBH case.  For details on all the parameters you can
-see more in [Configurator](https://bitbucket.org/fukaws/fuka/src/fuka/include/Configurator/) README.
+see more in [Configurator](../../../include/Configurator/) README.
 
 <b>
 Notes:
@@ -163,7 +163,7 @@ binary
 ```
 
 The above includes parameters that must be fixed by the user.  The parameters for each BH are simply copied from the isolated solution which can be read
-in detail in the [BH README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/BH/) -
+in detail in the [BH README](../BH/README.md) -
 the same fixing applies also in the BBH.
 
 The fixing parameters most relevant to the binary are
@@ -253,7 +253,7 @@ Now that you've generated the simplest case and we have a better understanding o
 3. For BH2 set:
     - `mch 0.9`
     - `chi 0.85`
-3. Run (using parallelization) using this config file, e.g. `mpirun ./bin/Release/solve initial_bh.info`
+3. Run (using parallelization) using this config file, e.g. `mpirun ./bin/Release/solve initial_bbh.info`
 
 This time around we see the iterative `chi` increase being done for the primary BH, but overall the only changes
 observed are related to the isolated BH solvers (see the BH README for details), but the binary solver itself
@@ -329,7 +329,7 @@ Once these estimates are computed an interface code is ran
 which
 
 - solves each BH configuration in isolation
-(See the [BH README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/BH/) for more details).
+(See the [BH README](../BH/README.md) for more details).
 - obtains boosted isolated solution using the estimated `global_omega`
 
 At this point, the binary numerical space and fields are constructed and the isolated solutions are interpolated onto

@@ -104,7 +104,7 @@ Central Euler Constant = -0.28321
 ```
 
 The first two blocks contain information related to the component NSs - the second has been abbreviated since it contains identical information.
-These details are covered in the [NS README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/NS/).
+These details are covered in the [NS README](../NS/README.md).
 The only additional parameter is the `Center_COM`.  This is the coordinate center of each object when shifted by the
 "center-of-mass" of the binary or, more specifically, the location of the axis of rotation for the binary that can approximate a quasi-stationary solution.
 
@@ -125,7 +125,7 @@ The third block contains information specifically related to the binary
 
 Using your favorite text editor, you can open up the `initial_bns.info`.  We will go through the file,
 but we'll discuss only the details relevant to the BNS case.  For details on all the parameters you can
-read more in the [Configurator README](https://bitbucket.org/fukaws/fuka/src/fuka/include/Configurator/).
+read more in the [Configurator README](../../../include/Configurator/).
 
 <b>
 Notes:
@@ -170,7 +170,7 @@ binary
 
 The above includes parameters that can be fixed by the user as well as parameters that are automated in the background
 and should not be changed.  The parameters for each NS are simply copied from the isolated solution which is discussed
-in detail in the [NS README](https://bitbucket.org/fukaws/fuka/src/fukav2//codes/FUKAv2_Solvers/NS/) -
+in detail in the [NS README](../NS/README.md) -
 the same fixing applies also in the BNS.  The relevant parameters to discuss are
 
 - `res` The resolution shown for the individual compact objects is the highest resolution the *isolated* dataset will be ran at.  This can be important for TOV solutions as the total baryonic mass is sensitive to the resolution.  `res 11` is the minimum recommended for production runs
@@ -275,7 +275,7 @@ Now that you've generated the simplest case and we have a better understanding o
 This time around we see the iterative `chi` increase being done for the primary NS as well as a regrid of the solution
 to the higher resolution before being imported into the initial binary setup. Overall, the main changes
 observed are related to the isolated NS solvers
-(see the [NS README](https://bitbucket.org/fukaws/fuka/src/fukav2//codes/FUKAv2_Solvers/NS/) for details),
+(see the [NS README](../NS/README.md) for details),
 but the binary solver itself is consistent when compared to the equal mass case.
 
 In the event you changed the resolution to 11pts, the solver will solve the binary at the `initial_resolution` until a
@@ -368,7 +368,7 @@ ADM masses and the coordinate separation
 Once these estimates are computed an interface code is ran
 which
 
-- solves each NS configuration in isolation (see the [NS README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/NS/) for more details).
+- solves each NS configuration in isolation (see the [NS README](../NS/README.md) for more details).
 - obtains boosted isolated solutions using the estimated `global_omega`
 
 At this point, the binary numerical space and fields are constructed and the isolated solutions are interpolated onto

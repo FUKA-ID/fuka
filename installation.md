@@ -31,22 +31,43 @@ the installation directory in order for FUKA's `cmake` build scripts to
 find it.  Finally, `-DGRHAYL_EOS=ON` needs to be added to all cmake
 commands to ensure `GRHayL` support is active at build time.
 
-#### Optional: MUMPS sparse Newton solver
-With [MUMPS](https://mumps-solver.org) (5.x, built with the same MPI and ScaLAPACK as FUKA), the
-parallel Newton-Raphson step stores the Jacobian as a sparse matrix and factors it with MUMPS instead of
-the dense ScaLAPACK solve, so the linear-solve memory scales with the number of nonzeros instead of n².
-Set `MUMPS_ROOT` (and `METIS_ROOT` / `PARMETIS_ROOT` if MUMPS uses them) before running `cmake`; the build
-detects it automatically (`-DMUMPS=OFF` disables it). Without `MUMPS_ROOT` nothing changes. With spack, e.g.
+#### Recommended: MUMPS sparse Newton solvers
+With [MUMPS](https://mumps-solver.org) (5.x, built with the same MPI and ScaLAPACK/MKL as FUKA) the
+Newton steps use a sparse Jacobian and, by default, Newton-Krylov (GMRES preconditioned by MUMPS
+factors) instead of the dense ScaLAPACK solve. Memory then grows with the number of non-zeros
+instead of the square of the number of unknowns, and the default binary ID runs need about a fifth
+of the nodes. Without MUMPS, FUKA builds and runs exactly as before (dense ScaLAPACK).
 
-```
-spack add 'mumps@5.8.1 +double ~complex ~float +metis +parmetis +openmp ~int64 ^<your mpi> ^<your scalapack/mkl>'
-export MUMPS_ROOT=$(spack location -i mumps) METIS_ROOT=$(spack location -i metis) PARMETIS_ROOT=$(spack location -i parmetis)
-```
+1. Install MUMPS with METIS and ParMETIS, against the MPI and MKL/ScaLAPACK that FUKA uses. With
+   spack, e.g.
 
-Pin MPI and MKL/ScaLAPACK to the installations FUKA already uses. If MUMPS links threaded MKL, the build
-switches FUKA to `mkl_gnu_thread` as well, so run with `OMP_NUM_THREADS=1`. At run time
-`KADATH_LINSOLVE=scalapack` selects the dense solver again; see `codes/tests/newton_sparse/README.md`
-for all switches and the tests.
+   ```
+   spack add 'mumps@5.8.1 +double ~complex ~float +metis +parmetis +openmp ~int64 ^<your mpi> ^<your scalapack/mkl>'
+   spack install
+   ```
+
+2. Before running `cmake` (or the `compile` scripts) for the library *and* for the solvers, set
+
+   ```
+   export MUMPS_ROOT=$(spack location -i mumps)
+   export METIS_ROOT=$(spack location -i metis) PARMETIS_ROOT=$(spack location -i parmetis)
+   ```
+
+   `cmake` prints `MUMPS: enabled (...)` when it finds them (`-DMUMPS=OFF` builds without MUMPS
+   even if `MUMPS_ROOT` is set).
+3. Run with `export OMP_NUM_THREADS=1` (one thread per MPI rank). If MUMPS links threaded MKL,
+   the build switches FUKA to `mkl_gnu_thread` as well, since MKL forbids mixing threading layers.
+
+Nothing else changes for users: the solvers, config files and outputs are the same. The Newton
+linear solver can be chosen at run time with `KADATH_LINSOLVE`:
+
+| `KADATH_LINSOLVE` | Solver |
+|---|---|
+| `krylov` (default with MUMPS) | Newton-Krylov: GMRES on the matrix-free Jacobian product, preconditioned by MUMPS factors of an earlier Jacobian |
+| `mumps` | exact sparse Newton step with MUMPS every iteration |
+| `scalapack` (default without MUMPS) | dense LU, the original solver |
+
+The tests of the sparse solvers are in `codes/tests/newton_sparse` (see its README).
 
 # 2. Repository sync
 
@@ -144,13 +165,13 @@ the number of parallel tasks manually to start the compilation.
 # 7. Compilation - Initial Data
 
 The latest solvers can be found in the
-`$HOME_KADATH/codes/FUKAv2_Solvers` base directory. As discussed in the
+`$HOME_KADATH/codes/FUKA` base directory. As discussed in the
 [Organization](index.html) section, all of the initial data solvers have
 a similar structure.
 
 To compile an initial data solver once the FUKA library has been
 successfully compiled, enter the base directory for the solver, e.g.
-`$HOME_KADATH/codes/FUKAv2_Solvers/BH` and execute the `compile` script.
+`$HOME_KADATH/codes/FUKA/BH` and execute the `compile` script.
 
 Alternatively, one can follow the instructions for manual compilation as
 discussed previously.

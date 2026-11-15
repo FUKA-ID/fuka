@@ -35,7 +35,7 @@ where plus and minus simply refer to their location on the x-axis.**
 3. This will result in the generation of a pair of files containing the solution: `BHNS_ECC_RED.togashi.35.0.0.2.8.q1.0.0.09.<info/dat>`
 
 **Note: In the event you have learned about generating FUKAv2 ID in the recommended order as discussed in the
-[FUKAv2 README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/) and
+[FUKAv2 README](../README.md) and
 you have not disabled `centralized_cos`; you can look into the solver output to find that the solution of the 1.4M NS generated
 in the previous runs has been reused.**
 
@@ -123,8 +123,8 @@ Central Euler Constant = +7.60026e-01
 
 The first two blocks contain information related to the component objects.
 These details are covered in the
-[NS README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/NS/) and the
-[BH README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/BH/).
+[NS README](../NS/README.md) and the
+[BH README](../BH/README.md).
 The only additional parameter is the `Center_COM`.
 This is the coordinate center of each object when shifted by the
 "center-of-mass" of the binary or, more specifically, the location of the axis of rotation
@@ -147,7 +147,7 @@ The third block contains information specifically related to the binary
 
 Using your favorite text editor, you can open up the `initial_bhns.info`.  We will go through the file,
 but we'll discuss only the details relevant to the BHNS case.  For details on all the parameters you can
-read more in the [Configurator README](https://bitbucket.org/fukaws/fuka/src/fuka/include/Configurator/).
+read more in the [Configurator README](../../../include/Configurator/).
 
 <b>
 Notes:
@@ -192,8 +192,8 @@ binary
 
 During the various steps to construct the initial binary guess
 the parameters for each object are copied to construct the isolated solutions as discussed
-in detail in the respective readmes ([NS README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/NS/),
-[BH README](https://bitbucket.org/fukaws/fuka/src/fuka/codes/FUKAv2_Solvers/BH/)) -
+in detail in the respective readmes ([NS README](../NS/README.md),
+[BH README](../BH/README.md)) -
 the same fixing parameters also apply for the BHNS.  The relevant parameters to discuss are
 
 - `res` The resolution shown for the individual compact objects is the highest resolution the *isolated* dataset will be solved at.  This can be important for TOV solutions as the total baryonic mass is sensitive to the resolution.  `res 11` is recommended for

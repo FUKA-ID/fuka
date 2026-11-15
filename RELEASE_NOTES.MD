@@ -1,5 +1,24 @@
 # Frankfurt University/Kadath Initial Data (FUKA) - Release Notes
 
+## v2.5.0
+### New Features
+* Sparse Newton solvers for all ID codes (requires MUMPS, see `installation.md`).
+  The Jacobian of each Newton step is assembled as a sparse matrix instead of a dense ScaLAPACK
+  matrix, so the solve no longer needs memory proportional to the square of the number of unknowns.
+    * Default: Newton-Krylov. GMRES on the matrix-free Jacobian-vector product, preconditioned by
+      MUMPS factors of an earlier Jacobian; the Jacobian is only re-assembled when the
+      preconditioner no longer suffices (typically 1-2 assemblies per stage).
+    * `KADATH_LINSOLVE` selects the solver at run time: `krylov` (default with MUMPS), `mumps`
+      (exact sparse Newton step every iteration) or `scalapack` (the previous dense solver, the
+      default when FUKA is built without MUMPS). No other settings are needed.
+    * The default BBH and BNS CI cases run on 2 nodes instead of 10 and finish 3-6 times faster
+      with the same solutions (see the PR / benchmark tables in the solver READMEs).
+* Faster Jacobian assembly for every solver: `do_col_J` only re-evaluates definitions and
+  operators that a column can change (unchanged subtrees are cached, linear operators act on the
+  derivative only), and `do_JX` uses the same shortcuts.
+* The peak memory (VmHWM per rank, per node and in total) is printed after every Newton step.
+* Tests of the sparse solvers: `codes/tests/newton_sparse` (see its README).
+
 ## v2.4.5
 ### Bug Fixes
 * The top theta coefficient of axisymmetric (m = 0) `COS_EVEN` fields is no longer an
