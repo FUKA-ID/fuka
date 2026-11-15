@@ -19,6 +19,7 @@
 #pragma once
 #include <variant>
 #include "FUKA_Solvers/utilities/fuka_version.hpp"
+#include "atomic_file.hpp"
 #include "config_enums.hpp"
 #include "config_utils_boost.hpp"
 #include "configurator_base.hpp"

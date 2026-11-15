@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
+#include "Configurator/atomic_file.hpp"
 #include "Configurator/config_bco.hpp"
 #include "Configurator/config_binary.hpp"
 #include "kadath.hpp"
@@ -89,11 +90,14 @@ void save_to_file(std::stringstream& base_fname,
     bconfig.update_metadata();
     bconfig.write_config();
     std::string kadath_filename = bconfig.space_filename();
-    FILE* ff = fopen(kadath_filename.c_str(), "w");
+    // written under a temporary name and renamed: other ranks read it right after a barrier
+    std::string const tmp = FUKA_Config::atomic_tmp_name(kadath_filename);
+    FILE* ff = fopen(tmp.c_str(), "w");
     space.save(ff);
 
     (fields.save(ff), ...);
     fclose(ff);
+    FUKA_Config::atomic_commit(tmp, kadath_filename);
 }
 
 /**
@@ -117,11 +121,14 @@ void save_to_file(space_t& space, config_t& bconfig, fields_t&... fields) {
     bconfig.write_config();
 
     std::string kadath_filename = bconfig.space_filename();
-    FILE* ff = fopen(kadath_filename.c_str(), "w");
+    // written under a temporary name and renamed: other ranks read it right after a barrier
+    std::string const tmp = FUKA_Config::atomic_tmp_name(kadath_filename);
+    FILE* ff = fopen(tmp.c_str(), "w");
     space.save(ff);
 
     (fields.save(ff), ...);
     fclose(ff);
+    FUKA_Config::atomic_commit(tmp, kadath_filename);
 }
 
 /**

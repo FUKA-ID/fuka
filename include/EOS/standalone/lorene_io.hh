@@ -1,3 +1,4 @@
+// clang-format off
 /*
  * =====================================================================================
  *
@@ -69,6 +70,13 @@ static std::array<std::vector<double>, 3> Lorene_Table(const std::string &filena
       vectors[1].push_back(eps);
       vectors[2].push_back(press);
     }
+  }
+  // An unreadable file (e.g. a directory because eosfile was empty) gives no entries; pop_back below
+  // would then wrap the sizes and the next allocation fails with an unrelated error.
+  if (vectors[0].size() < 2) {
+    std::string msg = "Lorene_Table: no EOS entries read from '" + filename + "'";
+    std::cerr << msg << std::endl;
+    throw std::runtime_error(msg);
   }
   // Last entry is eof duplication, so remove
   vectors[0].pop_back();

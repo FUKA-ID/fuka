@@ -147,7 +147,10 @@ void kadath_config_boost<ParamC>::write_config(std::string ofile) {
     }
 
     s = config_filename_abs();
-    pt::write_info(s, new_tree);
+    // written under a temporary name and renamed: other ranks read it right after a barrier
+    std::string const tmp = atomic_tmp_name(s);
+    pt::write_info(tmp, new_tree);
+    atomic_commit(tmp, s);
 }
 
 template <typename ParamC>
@@ -193,7 +196,10 @@ void kadath_config_boost<ParamC>::write_minimal_config(std::string ofile) {
     }
 
     s = config_filename_abs();
-    pt::write_info(s, new_tree);
+    // written under a temporary name and renamed: other ranks read it right after a barrier
+    std::string const tmp = atomic_tmp_name(s);
+    pt::write_info(tmp, new_tree);
+    atomic_commit(tmp, s);
 }
 
 /**
