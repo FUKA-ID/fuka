@@ -38,10 +38,10 @@ struct MumpsOptions {
     /// INFOG(16) + 64 MB on every rank (a rank with a tiny own estimate that receives delayed pivots then still
     /// has room), at most 80 % of the free node memory per rank; doubled on workspace errors.
     int max_mem_mb = 0;
-    /// ICNTL(6): column permutation towards a zero-free diagonal (centralized input only). 3 (maximize the
-    /// smallest diagonal entry): on Kadath Jacobians the analysis is 3-4x faster than with 7 (automatic), with
-    /// the same factorization time and residual (BH, BBH, BNS); 1 (structural) is the retry.
-    int permutation = 3;
+    /// ICNTL(6): column permutation towards a zero-free diagonal (centralized input only); 7 = automatic, 1 =
+    /// structural (the retry). 3 made the analysis 3-4x faster but pivoted badly on large binary Jacobians (up to
+    /// 1e5 delayed pivots, residuals 1e-9 ... 4e-7).
+    int permutation = 7;
     /// ICNTL(8): scaling strategy; -1 = 0 (none) for centralized input, 77 (automatic) for distributed input.
     /// Centralized + 77 uses the scaling of the ICNTL(6) matching, which produced solutions with residual 1e-2
     /// (reported as success) on BH Jacobians; without scaling they solve to <= 1e-14 at the same fill and time.

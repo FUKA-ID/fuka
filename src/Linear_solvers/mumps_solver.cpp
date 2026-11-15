@@ -222,6 +222,9 @@ int MumpsSolver::solve(int n,
         id_.rhs = rhs_solution.data();
     set_icntl(16, 1);  // one OpenMP thread per MPI rank
     id_.cntl[1 - 1] = options_.pivot_threshold;
+    // Up to 3 steps of iterative refinement with the factors (stops when converged): a safeguard for Jacobians
+    // with many delayed pivots, at the cost of a few solves.
+    set_icntl(10, 3);
 
     double start = MPI_Wtime();
     run(kJobAnalysis);
@@ -311,6 +314,7 @@ int MumpsSolver::solve_factored(std::vector<double>& rhs_solution) {
         return -1;
     set_icntl(20, 0);
     set_icntl(21, 0);
+    set_icntl(10, 0);  // no refinement: the matrix is not kept for JOB=3
     id_.nrhs = 1;
     id_.lrhs = n_;
     id_.rhs = rank_ == 0 ? rhs_solution.data() : nullptr;
