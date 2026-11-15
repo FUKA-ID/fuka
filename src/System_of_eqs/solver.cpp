@@ -176,6 +176,16 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 			else
 				cst[i]->set_der_zero() ;
 	}
+	// Shortcuts of do_col_J (Ope_eq::action) outside the variable domains: new derivatives, same fields.
+	if (jx_shortcuts && prune_zero_derivatives) {
+		column_stamp ++ ;
+		prune_active = true ;
+		prune_skip_dom[0] = -1 ;
+		prune_skip_dom[1] = -1 ;
+		prune_skip_mask.assign(espace.get_nbr_domains(), 0) ;
+		for (int d : variable_domains)
+			prune_skip_mask[d] = 1 ;
+	}
 	lap(times_JX.setup) ;
 	double const t_met = profile_phases ? phase_clock() : 0. ;
 	if (met!=0x0)  
@@ -209,6 +219,8 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 
 	for (int i=0 ; i<neq ; i++)
 	    eq[i]->export_der(conte, results, res, pos_res) ;
+	prune_active = false ;
+	prune_skip_mask.clear() ;
 	lap(times_JX.exp) ;
 	if (profile_phases)
 		times_JX.calls ++ ;
@@ -227,6 +239,14 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 		}
 	} ;
 
+	double t_setup = t_phase ;
+	auto setup_lap = [&](double& acc) {
+		if (profile_phases) {
+			double const now = phase_clock() ;
+			acc += now - t_setup ;
+			t_setup = now ;
+		}
+	} ;
 	// Affecte nterms derivatives :
 	int conte = 0 ;
 	int zedom = -1 ;
@@ -235,6 +255,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	zedoms = - 1 ;
 	// Variable Domains :
 	espace.affecte_coef_to_variable_domains(conte, cc, zedoms) ;
+	setup_lap(times_col_J.setup_vd) ;
 	column_stamp ++ ;
 	prune_active = prune_zero_derivatives ;
 	prune_skip_dom[0] = zedoms(0) ;
@@ -252,6 +273,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	  for (int i=0 ; i<nterm ; i++)
 	    term[i]->set_der_zero() ;
 	}
+	setup_lap(times_col_J.setup_zero) ;
 	
 	// Double 
 	for (int i=0 ; i<nvar_double ; i++) {
@@ -266,6 +288,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 				term_double[i*ndom+(dd-dom_min)]->set_der_d(0.) ;
 		conte ++ ;
 	}
+	setup_lap(times_col_J.setup_double) ;
 
 	// Fields
 	// Terms that do not hold coefficient cc keep the derivative they have (zero or from the variable domains).
@@ -303,6 +326,7 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 
 		term[i]->set_der_t(auxi + term[i]->get_der_t()) ;
 	}
+	setup_lap(times_col_J.setup_fill) ;
 	
 	lap(times_col_J.setup) ;
 	// Metric quantities and definitions: only where they can have changed. In a domain not touched by

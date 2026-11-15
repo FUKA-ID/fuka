@@ -168,7 +168,8 @@ Term_eq Ope_eq::action() const {
 		}
 		return res ;
 	}
-	if ((syst==0x0) || (!syst->prune_active) || (dom==syst->prune_skip_dom[0]) || (dom==syst->prune_skip_dom[1]))
+	if ((syst==0x0) || (!syst->prune_active) || (dom==syst->prune_skip_dom[0]) || (dom==syst->prune_skip_dom[1])
+	    || ((!syst->prune_skip_mask.empty()) && (syst->prune_skip_mask[dom]!=0)))
 		return compute() ;
 	// Zero derivative: the cached result.
 	if (der_is_zero()) {

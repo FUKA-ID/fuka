@@ -263,6 +263,40 @@ void check_skip_clean(System_of_eqs& syst, std::string const& label) {
             check(same, "T3d " + label + ": do_col_J with skipped clean domains and pruned zero derivatives bitwise identical (" +
                             std::to_string(m) + " columns, 3 scrambled passes)");
     }
+
+    // T3e: do_JX with the same shortcuts (outside the variable domains) agrees with do_JX without them, also
+    // after a do_col_J in between.
+    std::vector<Array<double>> vectors;
+    for (int v = 0; v < 3; ++v) {
+        Array<double> x(n);
+        for (int i = 0; i < n; ++i)
+            x.set(i) = std::sin(0.37 * (i + 1) * (v + 1)) + (v == 2 ? 0.5 : 0.);
+        vectors.push_back(x);
+    }
+    syst.prune_zero_derivatives = true;
+    syst.prune_linear = true;
+    syst.jx_shortcuts = false;
+    syst.sec_member();
+    std::vector<Array<double>> plain;
+    for (auto const& x : vectors)
+        plain.push_back(syst.do_JX(x));
+    syst.jx_shortcuts = true;
+    syst.sec_member();
+    double worst = 0.;
+    for (int pass = 0; pass < 2; ++pass)
+        for (std::size_t v = 0; v < vectors.size(); ++v) {
+            if (pass == 1 && v == 1)
+                syst.do_col_J(columns[3]);
+            Array<double> const jx(syst.do_JX(vectors[v]));
+            double diff = 0., scale = 0.;
+            for (int i = 0; i < jx.get_size(0); ++i) {
+                diff = std::max(diff, std::fabs(jx(i) - plain[v](i)));
+                scale = std::max(scale, std::fabs(plain[v](i)));
+            }
+            worst = std::max(worst, scale > 0. ? diff / scale : diff);
+        }
+    check(worst <= 1e-12, "T3e " + label + ": do_JX with shortcuts agrees: max rel. diff = " + sci(worst) +
+                              " (3 vectors, 2 passes)");
 }
 
 /// T3b: J e_j from do_JX must equal the assembled column j (Newton-Krylov relies on it), whatever the previous

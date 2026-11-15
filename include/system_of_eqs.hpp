@@ -138,13 +138,17 @@ class System_of_eqs {
 	/// do_col_J does not recompute operator subtrees whose derivative is zero in the column; their result is
 	/// cached per operator (Ope_eq::action) until the fields change (vars_to_terms). Same results.
 	bool prune_zero_derivatives = true ;
-	bool prune_active = false ; ///< Pruning is on (inside do_col_J only).
+	bool prune_active = false ; ///< Pruning is on (inside do_col_J, and do_JX with jx_shortcuts).
 	/// do_col_J: a node linear in its parts with a non-zero derivative (derivatives, +, -, products with one
 	/// varying factor, quotients with a constant denominator) takes its value from a cache and applies itself
 	/// to the derivatives only. Same results up to round-off.
 	bool prune_linear = true ;
 	bool record_values = false ; ///< Inside sec_member: linear nodes store their value (for prune_linear).
 	int prune_skip_dom[2] = {-1, -1} ; ///< Domains without pruning in this column (moving variable domains).
+	/// do_JX uses the shortcuts of do_col_J (prune_zero_derivatives, prune_linear) outside the variable domains,
+	/// with the values recorded by sec_member at the same fields. Same results up to round-off.
+	bool jx_shortcuts = true ;
+	std::vector<char> prune_skip_mask ; ///< Per domain: no pruning there (do_JX: the variable domains); empty = none.
 	long column_stamp = 0 ; ///< Incremented by every do_col_J (validity of Ope_eq::der_is_zero).
 	long field_generation = 0 ; ///< Incremented when the fields are copied to the terms (cache validity).
 	/// do_col_J gives a derivative only to the term holding the column's coefficient, instead of building one for
@@ -158,6 +162,10 @@ class System_of_eqs {
 	/// Wall time spent in the phases of do_col_J / do_JX, accumulated while \c profile_phases is set.
 	struct Phase_times {
 		double setup = 0. ; ///< Derivatives of the unknowns (terms, variable domains).
+		double setup_vd = 0. ; ///< Part of \c setup: locating the column among the variable domains (do_col_J).
+		double setup_zero = 0. ; ///< Part of \c setup: zeroing the derivatives (do_col_J).
+		double setup_double = 0. ; ///< Part of \c setup: number unknowns (do_col_J).
+		double setup_fill = 0. ; ///< Part of \c setup: coefficient count and the derivative of the column's term.
 		double defs = 0. ; ///< Metric quantities and definitions.
 		double met = 0. ; ///< Part of \c defs spent in the metric update.
 		std::vector<double> per_def ; ///< Part of \c defs spent in each definition (do_col_J only, index as \c def).
@@ -221,6 +229,8 @@ class System_of_eqs {
 	* Returns the space.
 	*/
 	const Space& get_space() const {return espace ;} ;
+	int get_nterm() const {return nterm ;} ; ///< Number of \c Term_eq of the unknown fields.
+	int get_nterm_cst() const {return nterm_cst ;} ; ///< Number of \c Term_eq of the constants.
 	/**
 	* Returns the smallest index of the domains.
 	*/

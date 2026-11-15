@@ -468,9 +468,10 @@ namespace {
 void report_phase_times(System_of_eqs const& syst, char const* what, System_of_eqs::Phase_times& times) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	double local[6] = {times.setup, times.defs, times.eqs, times.exp, static_cast<double>(times.calls), times.met};
-	double sum[6];
-	MPI_Reduce(local, sum, 6, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	double local[10] = {times.setup, times.defs, times.eqs, times.exp, static_cast<double>(times.calls), times.met,
+	                    times.setup_zero, times.setup_double, times.setup_fill, times.setup_vd};
+	double sum[10];
+	MPI_Reduce(local, sum, 10, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 	int const ndef = syst.get_ndef();
 	std::vector<double> per_def(ndef, 0.);
 	if (static_cast<int>(times.per_def.size()) == ndef)
@@ -483,7 +484,11 @@ void report_phase_times(System_of_eqs const& syst, char const* what, System_of_e
 		return;
 	double const calls = sum[4];
 	std::cout << "Profile: " << what << " phases per call (" << calls << " calls, all ranks): setup "
-	          << sum[0] / calls << " s, definitions+metric " << sum[1] / calls << " s (metric " << sum[5] / calls
+	          << sum[0] / calls << " s";
+	if (sum[6] + sum[7] + sum[8] + sum[9] > 0.)
+		std::cout << " (variable domains " << sum[9] / calls << ", zeroing " << sum[6] / calls << ", numbers " << sum[7] / calls << ", column term "
+		          << sum[8] / calls << "; " << syst.get_nterm() << " terms, " << syst.get_nterm_cst() << " constants)";
+	std::cout << ", definitions+metric " << sum[1] / calls << " s (metric " << sum[5] / calls
 	          << " s), equations " << sum[2] / calls << " s, export " << sum[3] / calls << " s" << std::endl;
 	double total = 0.;
 	for (double t : per_def_sum)
@@ -1035,6 +1040,8 @@ Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, Sy
 	syst.prune_linear = env_on_root("KADATH_JACOBIAN_LINEAR", "1") == "1";
 	// KADATH_JACOBIAN_FAST_SETUP=0: do_col_J builds the derivative of every term to locate the column.
 	syst.fast_column_setup = env_on_root("KADATH_JACOBIAN_FAST_SETUP", "1") == "1";
+	// KADATH_JX_SHORTCUTS=0: do_JX recomputes every value (no pruning or linear nodes).
+	syst.jx_shortcuts = env_on_root("KADATH_JX_SHORTCUTS", "1") == "1";
 	syst.profile_phases = env_on_root("KADATH_NEWTON_PROFILE", "0") != "0";  // 2: phases only, no extra probes
 
 	Array<double> X (syst.get_nbr_unknowns());
