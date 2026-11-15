@@ -9,7 +9,10 @@ the library was built without MUMPS (`KADATH_USE_MUMPS` undefined).
 |---|---|---|
 | `test_sparse_triplets` | serial | block size rule, 1-D block-cyclic column ownership vs ScaLAPACK `numroc`/`indxl2g`, column to COO round trip (only exact zeros dropped), row/column maxima and `drop_negligible` |
 | `test_gmres` | serial | right-preconditioned GMRES on dense systems: requested tolerance met by the true residual, one iteration with the exact preconditioner, few with a stale one, iteration cap, zero right-hand side |
-| `test_mumps_wrapper` | 1, 2, 4 | `MumpsSolver` on a block-sparse matrix with bordering rows/columns and a zero diagonal: residual, error, identical solution on all ranks, instance reuse, centralized/distributed input, ParMETIS, independence of the column distribution, residual-check rejection, retry ladder, singular matrix detection |
+| `test_weighted_matching` | serial | maximum-product matching used for the column permutation of distributed input: optimal against brute force (n <= 8), recovers a permuted diagonally dominant matrix, structurally singular patterns and the columns reported by failed searches, n = 2000 |
+| `test_ordering_int64` | serial | MUMPS was built against METIS/ParMETIS (and Scotch, if enabled) with 64-bit indices, as reported by MUMPS itself (`mumps_metis_idxsize_`, `mumps_scotch_intsize_`); with 32-bit orderings large Jacobians fail with `INFOG(1) = -51` and fall back to the slower AMF ordering |
+| `test_ordering_large` | 40 (one node) | heavy, run separately: MUMPS analysis of a block matrix whose A + A^T graph has 2.6e9 > 2^31 entries (default size) with the sequential `metis` ordering, about 35 s; `parmetis` and `ptscotch` (argument) pass below 2^31 (`2000 400`, 1.6e9) but MUMPS 5.8.1's parallel analysis fails above it, so the solver uses the sequential analysis there |
+| `test_mumps_wrapper` | 1, 2, 4 | `MumpsSolver` on a block-sparse matrix with bordering rows/columns and a zero diagonal: residual, error, identical solution on all ranks, instance reuse, centralized/distributed input, distributed input with the wrapper's column permutation (incl. the retry with more gathered entries), ParMETIS, AMF ordering (the fallback after INFOG(1) = -51), independence of the column distribution, residual-check rejection, retry ladder, singular matrix detection |
 | `test_newton_kadath` | 1, 4 | a nonlinear Kadath system with a `var_double` and an `eq_int` row (analytic solution `P = log(1 + a/r)`, `lam = 1/2`): `do_col_J` determinism (T3), `do_JX(e_j) == do_col_J(j)` incl. adapted and homothetic variable domains (T3b, T3c), the `do_col_J` / `do_JX` shortcuts against the full evaluation (T3d, T3e), one Newton update MUMPS vs ScaLAPACK (T4a), full solves with MUMPS and ScaLAPACK (T4b) and Newton-Krylov (T4d) against each other and the analytic solution |
 
 ## Build and run
@@ -20,8 +23,17 @@ cd $HOME_KADATH/codes/tests/newton_sparse && . compile
 export OMP_NUM_THREADS=1
 ./bin/Release/test_sparse_triplets
 ./bin/Release/test_gmres
+./bin/Release/test_weighted_matching
+./bin/Release/test_ordering_int64
 for np in 1 2 4; do mpirun -np $np ./bin/Release/test_mumps_wrapper; done
 for np in 1 4; do mpirun -np $np ./bin/Release/test_newton_kadath; done
+```
+
+The large-graph check needs a full node (inside a job):
+
+```bash
+mpirun -np 40 ./bin/Release/test_ordering_large metis              # graph 2.6e9 > 2^31
+for o in parmetis ptscotch; do mpirun -np 40 ./bin/Release/test_ordering_large $o 2000 400; done
 ```
 
 `test_newton_kadath` takes about 5 minutes on 1 rank and 2 minutes on 4; the others a few seconds.

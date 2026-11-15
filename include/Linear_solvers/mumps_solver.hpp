@@ -18,11 +18,29 @@ namespace linear_solvers {
 /// Settings of MumpsSolver; ICNTL numbers refer to the MUMPS 5.8 user guide. The defaults are the ones the
 /// Newton solvers use; the other values exist for the retry ladder and the tests.
 struct MumpsOptions {
-    /// Gather the matrix on rank 0 (ICNTL(18)=0) so the zero-free-diagonal permutation ICNTL(6) can be used;
-    /// otherwise use distributed assembled input (ICNTL(18)=3), which avoids the copy on rank 0.
+    /// Gather the matrix on rank 0 (ICNTL(18)=0) so MUMPS can compute the zero-free-diagonal permutation
+    /// ICNTL(6) itself; otherwise use distributed assembled input (ICNTL(18)=3), which avoids the copy on
+    /// rank 0 but has no permutation unless matching_entries > 0.
     bool centralized = true;
-    /// ICNTL(28)=2 with ParMETIS (ICNTL(29)=2) instead of the sequential METIS ordering (ICNTL(7)=5).
+    /// ICNTL(28)=2 with ParMETIS (ICNTL(29)=2) instead of the sequential METIS ordering (ICNTL(7)=5). Off by
+    /// default: ParMETIS 4.0.3 with METIS 5.1.0 aborts with SIGFPE (a division by zero in METIS
+    /// FM_2WayCutRefine) on some FUKA Jacobians, also at n = 6k-52k on 80 ranks; the signal cannot be caught.
     bool parallel_analysis = false;
+    /// ICNTL(7) of the sequential analysis: 5 = METIS, 2 = AMF (internal). METIS and ParMETIS here use 32-bit
+    /// indices and refuse graphs with more than 2^31 - 1 entries (INFOG(1) = -51, e.g. KS binaries with finer
+    /// hole shells than (11, 11, 20)); with_internal_ordering() switches to AMF, which has no such limit but
+    /// gives more fill-in.
+    int ordering = 5;
+    /// It is also skipped when the graph of A + A^T may exceed 2^31 entries (2 nnz > 2^31 - 1): MUMPS's
+    /// parallel analysis fails there even with 64-bit orderings, the sequential METIS ordering does not.
+    /// parallel_analysis applies only from this n on; smaller matrices use the sequential ordering. On small
+    /// graphs ParMETIS can hand METIS an empty local subgraph, and METIS 5.1 then divides by zero
+    /// (FM_2WayCutRefine, SIGFPE): seen for n = 243 on 4 ranks. The sequential analysis is cheap there anyway.
+    int parallel_analysis_min_n = 20000;
+    /// ICNTL(29) of the parallel analysis: 1 = PT-Scotch (if MUMPS was built with it), 2 = ParMETIS. PT-Scotch by
+    /// default: ParMETIS 4.0.3 aborts with SIGFPE on FUKA Jacobians also with 64-bit indices; PT-Scotch 7.0.10
+    /// ran BBH/BHNS cases at 80 ranks without failures.
+    int parallel_ordering = 1;
     /// ICNTL(14): initial workspace relaxation, doubled on workspace errors.
     int mem_relax_percent = 30;
     /// Factorization retries after a workspace error (-8, -9, -17, -19, -20).
@@ -50,6 +68,17 @@ struct MumpsOptions {
     /// Largest accepted max|A x - b| / max|b|; a worse solution is rejected with kInaccurateSolution, so a
     /// factorization that reports success but is wrong is never used.
     double residual_tolerance = 1e-10;
+    /// Distributed input only: compute the column permutation of ICNTL(6) here (MUMPS applies it only to a
+    /// matrix centralized on rank 0). Each rank keeps, of each of its columns, the matching_entries largest
+    /// entries and the matching_entries largest relative to their row maxima; rank 0 gathers only those and
+    /// computes a maximum-product matching. If they hold no perfect matching, rank 0 also gathers all entries
+    /// of the columns its failed searches reached, for up to 8 rounds and 25 % of the matrix; then
+    /// kNoMatching is returned and the retry ladder gathers the matrix. 0 = no permutation: Kadath Jacobians
+    /// then need 7-25x larger factors and many delayed pivots.
+    /// Off by default: on FUKA binaries (2026-11-15, 80 ranks) the sampled entries never held a perfect
+    /// matching and the expansion gathered 64-91 % of the matrix on rank 0, so it saved no memory, and the
+    /// matching took longer than MUMPS's own analysis (runs 1.2-2.2x slower than centralized input).
+    int matching_entries = 0;
 };
 
 /// Statistics of the last MumpsSolver::solve call.
@@ -72,6 +101,8 @@ struct MumpsStats {
         0;  ///< ICNTL(23) of the last factorization attempt (MB per rank).
     double time_gather =
         0.;  ///< Seconds spent gathering triplets on rank 0 (centralized input).
+    double time_matching =
+        0.;  ///< Seconds for the column permutation of distributed input (pruning, gather, matching).
     double time_analysis = 0.;  ///< Seconds in JOB=1.
     double time_factor_solve =
         0.;  ///< Seconds in the successful JOB=5 (and failed attempts).
@@ -79,6 +110,8 @@ struct MumpsStats {
 
 /// Status returned by MumpsSolver::solve when MUMPS succeeded but the solution fails the residual check.
 constexpr int kInaccurateSolution = -1000;
+/// Status returned by MumpsSolver::solve when no perfect matching was found for the column permutation.
+constexpr int kNoMatching = -1001;
 
 /// Unsymmetric sparse direct solve of A x = b with MUMPS on a communicator.
 class MumpsSolver {
@@ -123,6 +156,8 @@ class MumpsSolver {
     MumpsStats stats_;
     DMUMPS_STRUC_C id_;
     bool factored_ = false;
+    std::vector<int>
+        col_perm_;  ///< original column (1-based) of permuted column i; empty = no permutation
     int n_ = 0;
 };
 
@@ -139,6 +174,11 @@ struct MumpsAttempt {
 /// the structural permutation ICNTL(6)=1 and distributed input. The retries use the automatic scaling and
 /// memory budget, because they are a recovery path; both solved every dumped BH Jacobian accurately.
 std::vector<MumpsAttempt> mumps_retry_ladder(MumpsOptions const& base);
+
+/// INFOG(1) of an analysis whose graph is too large for the 32-bit external ordering.
+constexpr int kGraphTooLarge = -51;
+/// @p options with the internal AMF ordering and sequential analysis (the fallback after kGraphTooLarge).
+MumpsOptions with_internal_ordering(MumpsOptions options);
 
 }  // namespace linear_solvers
 }  // namespace Kadath

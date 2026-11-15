@@ -206,7 +206,7 @@ The above mentioned [compile script](https://github.com/samueltootle/fuka/tree/f
 5. GSL
 6. scaLAPACK
 7. MPI
-8. (recommended) [MUMPS](https://mumps-solver.org) 5.x with METIS and ParMETIS, for the sparse Newton solvers
+8. (recommended) [MUMPS](https://mumps-solver.org) 5.x with METIS and ParMETIS built with 64-bit indices, for the sparse Newton solvers (see [installation](installation.md))
 9. Boost
 10. Boost::python (to compile [PythonTools](https://github.com/samueltootle/fuka/tree/fuka/codes/PythonTools/))
 11. (optional) [GRHayL](https://github.com/GRHayL/GRHayL)

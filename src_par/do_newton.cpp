@@ -472,9 +472,12 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
 	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(MumpsOptions());
 	int status = 0;
+	bool internal_ordering = false;  // after -51 every attempt uses AMF: the graph is the same for all of them
 	for (std::size_t attempt = 0; attempt < ladder.size(); ++attempt) {
 		x.assign(second.get_data(), second.get_data() + n);
 		MumpsOptions options = ladder[attempt].options;
+		if (internal_ordering)
+			options = with_internal_ordering(options);
 		if (preconditioner)
 			options.residual_tolerance = std::max(options.residual_tolerance, kPreconditionerResidual);
 		solver.reset();
@@ -486,9 +489,16 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 			          << ") failed: " << mumps_error_message(status) << "; residual = " << f.relative_residual
 			          << ", pivots delayed = " << f.delayed_pivots << ", off-diagonal = " << f.off_diagonal_pivots
 			          << ", estimated factor entries = " << f.estimated_factor_entries << std::endl;
-			if (attempt + 1 < ladder.size())
-				std::cout << "MUMPS: retrying with " << ladder[attempt + 1].name << std::endl;
 		}
+		if (status == kGraphTooLarge && !internal_ordering) {
+			internal_ordering = true;
+			if (rank == 0)
+				std::cout << "MUMPS: retrying " << ladder[attempt].name << " with the AMF ordering" << std::endl;
+			--attempt;
+			continue;
+		}
+		if (rank == 0 && status != 0 && attempt + 1 < ladder.size())
+			std::cout << "MUMPS: retrying with " << ladder[attempt + 1].name << std::endl;
 		if (status == 0) {
 			if (rank == 0 && attempt > 0)
 				std::cout << "MUMPS: attempt " << attempt + 1 << " (" << ladder[attempt].name << ") succeeded"
@@ -501,9 +511,11 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		MumpsStats const& s = solver->stats();
 		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / (1.0 * n * n) << " % of dense), factors = "
 		          << s.factor_entries << ", memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total
-		          << " MB, relative residual = " << s.relative_residual << std::endl;
-		std::cout << "Inverting the matrix: " << s.time_gather + s.time_analysis + s.time_factor_solve
-		          << " seconds (gather " << s.time_gather << ", analysis " << s.time_analysis << ", factor+solve "
+		          << " MB, relative residual = " << s.relative_residual << ", pivots delayed = " << s.delayed_pivots
+		          << std::endl;
+		std::cout << "Inverting the matrix: " << s.time_gather + s.time_matching + s.time_analysis + s.time_factor_solve
+		          << " seconds (gather " << s.time_gather << ", matching " << s.time_matching << ", analysis "
+		          << s.time_analysis << ", factor+solve "
 		          << s.time_factor_solve << ")" << std::endl;
 	}
 	return status;

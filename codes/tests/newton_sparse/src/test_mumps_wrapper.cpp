@@ -16,7 +16,9 @@
  *  - centralized input: repeated solves and other column distributions agree to roundoff (<= 1e-12)
  *  - a solution failing the residual check is rejected (kInaccurateSolution)
  *  - retry ladder: failing first attempt (too small configured budget) recovered by the next configuration
- *  - a structurally singular matrix (an unknown in no equation: empty column) is reported (-6 or -10)
+ *  - distributed input with the column permutation computed here (matching_entries), incl. ParMETIS
+ *  - a structurally singular matrix (an unknown in no equation: empty column) is reported (-6, -10, or
+ *    kNoMatching with the matching)
  *
  * Run with 1, 2 and 4 MPI ranks; returns 0 if all checks pass (77 = skipped, built without MUMPS).
  */
@@ -274,6 +276,16 @@ void check_retry_ladder(MumpsOptions base, std::string const& label) {
     no_retry.retry = false;
     check(mumps_retry_ladder(no_retry).size() == 1,
           label + ": retry = false gives a single attempt");
+    MumpsOptions matched_base = base;
+    matched_base.centralized = false;
+    matched_base.matching_entries = 16;
+    auto const matched_ladder = mumps_retry_ladder(matched_base);
+    check(matched_ladder.size() == 4 && matched_ladder[0].options.matching_entries > 0 &&
+              matched_ladder[1].options.centralized && matched_ladder[1].options.permutation != 1 &&
+              matched_ladder[2].options.centralized && matched_ladder[2].options.permutation == 1 &&
+              !matched_ladder[3].options.centralized && matched_ladder[3].options.matching_entries == 0,
+          label + ": ladder from distributed input = matched distributed, centralized, structural, "
+                  "distributed without permutation");
     auto const ladder = mumps_retry_ladder(base);
     check(ladder.size() == 3 && ladder[1].options.permutation == 1 &&
               ladder[1].options.centralized && !ladder[2].options.centralized &&
@@ -313,7 +325,7 @@ void run_singular(MumpsOptions options, std::string const& label) {
     std::vector<double> x(n, 1.);
     SparseTriplets local = local_columns(a);
     int const status = solver.solve(n, local, x);
-    check(status == -10 || status == -6,
+    check(status == -10 || status == -6 || status == kNoMatching,
           label + ": singular matrix reported, status " +
               std::to_string(status));
 }
@@ -329,13 +341,37 @@ int main(int argc, char** argv) {
     centralized.centralized = true;
     MumpsOptions distributed;
     distributed.centralized = false;
+    distributed.matching_entries = 0;  // MUMPS without any column permutation
 
     run_case(centralized, "centralized/METIS");
     run_case(distributed, "distributed/METIS");
     if (nproc_ > 1) {
         MumpsOptions parallel = distributed;
         parallel.parallel_analysis = true;
+        parallel.parallel_analysis_min_n = 0;
         run_case(parallel, "distributed/ParMETIS");
+        MumpsOptions scotch = parallel;
+        scotch.parallel_ordering = 1;
+        run_case(scotch, "distributed/PT-Scotch");
+    }
+    // Column permutation computed in the wrapper (pruned gather + maximum-product matching), as the Newton
+    // solvers use it with distributed input; with 2 entries per column the retry with more entries may be needed.
+    MumpsOptions matched = distributed;
+    matched.matching_entries = 16;
+    run_case(matched, "distributed+matching/METIS");
+    MumpsOptions matched_small = distributed;
+    matched_small.matching_entries = 2;
+    run_case(matched_small, "distributed+matching (2 entries per column)/METIS");
+    // The fallback after INFOG(1) = -51 (graph too large for the 32-bit METIS): internal AMF ordering.
+    run_case(with_internal_ordering(matched), "distributed+matching/AMF");
+    run_case(with_internal_ordering(centralized), "centralized/AMF");
+    // ParMETIS on this small matrix: only on 2 ranks; on 4 METIS gets an empty local subgraph and divides by
+    // zero (see MumpsOptions::parallel_analysis_min_n).
+    if (nproc_ == 2) {
+        MumpsOptions matched_parallel = matched;
+        matched_parallel.parallel_analysis = true;
+        matched_parallel.parallel_analysis_min_n = 0;
+        run_case(matched_parallel, "distributed+matching/ParMETIS");
     }
     check_distribution_independence(centralized,
                                     "centralized distribution independence");
@@ -344,6 +380,7 @@ int main(int argc, char** argv) {
     check_residual_rejection(distributed, "distributed residual check");
     run_singular(centralized, "centralized singular");
     run_singular(distributed, "distributed singular");
+    run_singular(matched, "distributed+matching singular");
 
     if (rank_ == 0)
         std::cout << (failures == 0 ? "test_mumps_wrapper: PASS"

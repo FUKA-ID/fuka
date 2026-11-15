@@ -1,12 +1,14 @@
 #ifdef KADATH_USE_MUMPS
 
 #include "Linear_solvers/mumps_solver.hpp"
+#include "Linear_solvers/weighted_matching.hpp"
 
 #include <algorithm>
 #include <climits>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace Kadath {
@@ -115,6 +117,168 @@ void gather_on_root(std::vector<T> const& local,
     }
 }
 
+/// Column permutation for distributed input (the ICNTL(6) maximum-product matching, which MUMPS only
+/// computes for a matrix centralized on rank 0). Every rank keeps, of each of its columns, the @p per_column
+/// largest entries and the @p per_column largest entries relative to their row maxima; only those are
+/// gathered on rank 0 and matched there. If they hold no perfect matching, rank 0 asks for all entries of
+/// the columns its failed searches reached (the only entries that can complete it) and matches again, for
+/// at most @p max_rounds rounds and while the gathered entries stay below @p max_fraction of the matrix.
+/// Returns, on every rank, the original column (1-based) of permuted column i, so that row i holds a large
+/// entry on the diagonal; empty if no perfect matching was found. Collective.
+std::vector<int> matching_permutation(int n,
+                                      SparseTriplets const& local,
+                                      int per_column,
+                                      int max_rounds,
+                                      double max_fraction,
+                                      MPI_Comm comm) {
+    int rank, nproc;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &nproc);
+
+    std::vector<double> rowmax(n, 0.);
+    for (std::int64_t k = 0; k < local.size(); ++k)
+        rowmax[local.rows[k] - 1] =
+            std::max(rowmax[local.rows[k] - 1], std::fabs(local.values[k]));
+    MPI_Allreduce(MPI_IN_PLACE, rowmax.data(), n, MPI_DOUBLE, MPI_MAX, comm);
+
+    // Local entries grouped by column.
+    std::vector<std::int64_t> order;
+    order.reserve(local.size());
+    for (std::int64_t k = 0; k < local.size(); ++k)
+        if (local.values[k] != 0.)
+            order.push_back(k);
+    std::sort(order.begin(), order.end(), [&](std::int64_t a, std::int64_t b) {
+        return local.cols[a] < local.cols[b];
+    });
+    std::vector<char> keep(local.size(),
+                           0);  // 1 = selected now, 2 = already sent
+    auto keep_largest = [&](auto first, auto last, auto key) {
+        if (last - first > per_column)
+            std::nth_element(first,
+                             first + per_column,
+                             last,
+                             [&](std::int64_t a, std::int64_t b) {
+                                 return key(a) > key(b);
+                             });
+        for (auto it = first; it != last && it - first < per_column; ++it)
+            keep[*it] = 1;
+    };
+    for (auto first = order.begin(); first != order.end();) {
+        int const col = local.cols[*first];
+        auto last = first;
+        while (last != order.end() && local.cols[*last] == col)
+            ++last;
+        keep_largest(first, last, [&](std::int64_t k) {
+            return std::fabs(local.values[k]);
+        });
+        keep_largest(first, last, [&](std::int64_t k) {
+            return std::fabs(local.values[k]) / rowmax[local.rows[k] - 1];
+        });
+        first = last;
+    }
+    std::vector<std::int64_t>().swap(order);
+    std::vector<double>().swap(rowmax);
+
+    std::int64_t total_nnz = 0, sent = 0;
+    std::int64_t const local_nnz = local.size();
+    MPI_Allreduce(&local_nnz, &total_nnz, 1, MPI_INT64_T, MPI_SUM, comm);
+
+    SparseTriplets global;  // rank 0: everything gathered so far
+    std::vector<int> perm(n, 0);
+    for (int round = 0;; ++round) {
+        // Send the newly selected entries.
+        SparseTriplets fresh;
+        for (std::int64_t k = 0; k < local.size(); ++k)
+            if (keep[k] == 1) {
+                keep[k] = 2;
+                fresh.rows.push_back(local.rows[k]);
+                fresh.cols.push_back(local.cols[k]);
+                fresh.values.push_back(local.values[k]);
+            }
+        std::int64_t const fresh_nnz = fresh.size();
+        std::vector<std::int64_t> counts(nproc, 0);
+        MPI_Gather(&fresh_nnz,
+                   1,
+                   MPI_INT64_T,
+                   counts.data(),
+                   1,
+                   MPI_INT64_T,
+                   0,
+                   comm);
+        SparseTriplets received;
+        gather_on_root(fresh.rows, counts, received.rows, comm);
+        gather_on_root(fresh.cols, counts, received.cols, comm);
+        gather_on_root(fresh.values, counts, received.values, comm);
+        global.rows.insert(global.rows.end(),
+                           received.rows.begin(),
+                           received.rows.end());
+        global.cols.insert(global.cols.end(),
+                           received.cols.begin(),
+                           received.cols.end());
+        global.values.insert(global.values.end(),
+                             received.values.begin(),
+                             received.values.end());
+
+        std::vector<int> stuck;
+        int found = 0;
+        if (rank == 0) {
+            sent = global.size();
+            std::vector<std::int64_t> ptr(n + 1, 0);
+            for (int c : global.cols)
+                ++ptr[c];
+            for (int j = 0; j < n; ++j)
+                ptr[j + 1] += ptr[j];
+            std::vector<std::int64_t> next(ptr.begin(), ptr.end() - 1);
+            std::vector<int> row(global.size());
+            std::vector<double> val(global.size());
+            for (std::int64_t k = 0; k < global.size(); ++k) {
+                std::int64_t const at = next[global.cols[k] - 1]++;
+                row[at] = global.rows[k] - 1;
+                val[at] = global.values[k];
+            }
+            std::vector<int> const row_of_col =
+                max_product_matching(n, ptr, row, val, &stuck);
+            if (!row_of_col.empty()) {
+                found = 1;
+                if (round > 0)
+                    std::cout
+                        << "MUMPS: matching round " << round
+                        << ": perfect matching on " << sent << " entries ("
+                        << 100. * sent / std::max<std::int64_t>(1, total_nnz)
+                        << " %)" << std::endl;
+                for (int j = 0; j < n; ++j)
+                    perm[row_of_col[j]] = j + 1;
+            } else {
+                std::cout << "MUMPS: matching round " << round << ": " << sent
+                          << " entries ("
+                          << 100. * sent / std::max<std::int64_t>(1, total_nnz)
+                          << " %), " << stuck.size()
+                          << " columns reached by failed searches" << std::endl;
+            }
+        }
+        MPI_Bcast(&found, 1, MPI_INT, 0, comm);
+        if (found) {
+            MPI_Bcast(perm.data(), n, MPI_INT, 0, comm);
+            return perm;
+        }
+        MPI_Bcast(&sent, 1, MPI_INT64_T, 0, comm);
+        int stuck_n = static_cast<int>(stuck.size());
+        MPI_Bcast(&stuck_n, 1, MPI_INT, 0, comm);
+        if (round + 1 >= max_rounds || stuck_n == 0 ||
+            sent >= max_fraction * total_nnz)
+            return {};
+        stuck.resize(stuck_n);
+        MPI_Bcast(stuck.data(), stuck_n, MPI_INT, 0, comm);
+        std::vector<char> expand(n, 0);
+        for (int j : stuck)
+            expand[j] = 1;
+        for (std::int64_t k = 0; k < local.size(); ++k)
+            if (keep[k] == 0 && local.values[k] != 0. &&
+                expand[local.cols[k] - 1])
+                keep[k] = 1;
+    }
+}
+
 }  // namespace
 
 MumpsSolver::MumpsSolver(MPI_Comm comm, MumpsOptions const& options)
@@ -176,6 +340,40 @@ int MumpsSolver::solve(int n,
                comm_);
     MPI_Allreduce(&local_nnz, &stats_.nnz, 1, MPI_INT64_T, MPI_SUM, comm_);
 
+    // Distributed input: MUMPS cannot compute the ICNTL(6) column permutation, so it is computed here and
+    // applied to the local columns; the solution is permuted back below.
+    col_perm_.clear();
+    if (!options_.centralized && options_.matching_entries > 0) {
+        double const start = MPI_Wtime();
+        col_perm_ = matching_permutation(n,
+                                         local,
+                                         options_.matching_entries,
+                                         8,
+                                         0.25,
+                                         comm_);
+        stats_.time_matching = MPI_Wtime() - start;
+        if (col_perm_.empty())
+            return kNoMatching;
+        std::vector<int> inv(n);
+        for (int i = 0; i < n; ++i)
+            inv[col_perm_[i] - 1] = i + 1;
+        for (auto& c : local.cols)
+            c = inv[c - 1];
+    }
+
+    struct
+        RestoreColumns {  // the caller's triplets keep their original columns on every exit path
+        std::vector<int> const& perm;
+        SparseTriplets& t;
+        bool done = false;
+
+        ~RestoreColumns() {
+            if (!done && !perm.empty())
+                for (auto& c : t.cols)
+                    c = perm[c - 1];
+        }
+    } restore_columns{col_perm_, local};
+
     id_.n = n;
     SparseTriplets global;
     if (options_.centralized) {
@@ -206,12 +404,18 @@ int MumpsSolver::solve(int n,
     set_icntl(8,
               options_.scaling >= 0 ? options_.scaling
                                     : (options_.centralized ? 0 : 77));
-    if (options_.parallel_analysis) {
+    // MUMPS's parallel analysis fails on graphs above 2^31 entries even with 64-bit ParMETIS/PT-Scotch
+    // (ParMETIS: abort in Intel MPI; PT-Scotch: heap corruption after the ordering; test_ordering_large),
+    // while the sequential METIS ordering handles them. The graph of A + A^T has at most 2 nnz entries.
+    bool const graph_fits_parallel = 2 * stats_.nnz <
+                                     std::numeric_limits<std::int32_t>::max();
+    if (options_.parallel_analysis && options_.ordering == 5 &&
+        n >= options_.parallel_analysis_min_n && graph_fits_parallel) {
         set_icntl(28, 2);
-        set_icntl(29, 2);
+        set_icntl(29, options_.parallel_ordering);
     } else {
         set_icntl(28, 1);
-        set_icntl(7, 5);  // METIS
+        set_icntl(7, options_.ordering);
     }
 
     set_icntl(20, 0);  // dense centralized right-hand side
@@ -285,6 +489,16 @@ int MumpsSolver::solve(int n,
     stats_.peak_mem_mb_total = infog(22);
 
     MPI_Bcast(rhs_solution.data(), n, MPI_DOUBLE, 0, comm_);
+    if (!col_perm_
+             .empty()) {  // y of the column-permuted system -> x; the caller's columns are restored
+        std::vector<double> x(n);
+        for (int i = 0; i < n; ++i)
+            x[col_perm_[i] - 1] = rhs_solution[i];
+        rhs_solution.swap(x);
+        for (auto& c : local.cols)
+            c = col_perm_[c - 1];
+        restore_columns.done = true;
+    }
 
     // Residual check with the entries as given (MUMPS does not modify them): every rank multiplies its own.
     std::vector<double> local_ax(n, 0.), ax(n, 0.);
@@ -323,6 +537,12 @@ int MumpsSolver::solve_factored(std::vector<double>& rhs_solution) {
     if (infog(1) < 0)
         return infog(1);
     MPI_Bcast(rhs_solution.data(), n_, MPI_DOUBLE, 0, comm_);
+    if (!col_perm_.empty()) {
+        std::vector<double> x(n_);
+        for (int i = 0; i < n_; ++i)
+            x[col_perm_[i] - 1] = rhs_solution[i];
+        rhs_solution.swap(x);
+    }
     return 0;
 }
 
@@ -335,6 +555,12 @@ std::vector<MumpsAttempt> mumps_retry_ladder(MumpsOptions const& base) {
     recovery.max_mem_mb = 0;
     recovery.max_mem_retries = MumpsOptions{}.max_mem_retries;
 
+    if (!base.centralized) {  // MUMPS's own permutation on the gathered matrix
+        MumpsOptions centralized = recovery;
+        centralized.centralized = true;
+        ladder.push_back({"centralized input", centralized});
+    }
+
     MumpsOptions structural = recovery;
     structural.centralized = true;
     structural.permutation = 1;
@@ -342,8 +568,16 @@ std::vector<MumpsAttempt> mumps_retry_ladder(MumpsOptions const& base) {
 
     MumpsOptions distributed = recovery;
     distributed.centralized = false;
-    ladder.push_back({"distributed input", distributed});
+    distributed.matching_entries =
+        0;  // no gather at all; large fill, but it can still succeed
+    ladder.push_back({"distributed input without permutation", distributed});
     return ladder;
+}
+
+MumpsOptions with_internal_ordering(MumpsOptions options) {
+    options.ordering = 2;  // AMF
+    options.parallel_analysis = false;
+    return options;
 }
 
 std::string mumps_error_message(int infog1) {
@@ -353,6 +587,9 @@ std::string mumps_error_message(int infog1) {
             return "memory allocation failed (" + std::to_string(infog1) + ")";
         case -6:
             return "matrix is structurally singular (-6)";
+        case kGraphTooLarge:
+            return "graph too large for the 32-bit METIS/ParMETIS ordering "
+                   "(-51)";
         case -8:
         case -9:
         case -17:
@@ -361,6 +598,9 @@ std::string mumps_error_message(int infog1) {
                    std::to_string(infog1) + "): run on more nodes";
         case -10:
             return "matrix is numerically singular (-10)";
+        case kNoMatching:
+            return "no perfect matching for the column permutation "
+                   "(structurally singular pattern)";
         case kInaccurateSolution:
             return "MUMPS reported success but the solution fails the residual "
                    "check (max|Ax-b|/max|b| too large)";

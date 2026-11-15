@@ -18,6 +18,10 @@
   derivative only), and `do_JX` uses the same shortcuts.
 * The peak memory (VmHWM per rank, per node and in total) is printed after every Newton step.
 * Tests of the sparse solvers: `codes/tests/newton_sparse` (see its README).
+* Large Jacobians: build METIS and ParMETIS (and optionally PT-Scotch) with 64-bit indices (see
+  `installation.md`). With 32-bit orderings MUMPS stops with `INFOG(1) = -51` once the graph of A + A^T has
+  more than 2^31 - 1 entries; FUKA then retries with MUMPS's internal AMF ordering, which has no such limit
+  but gives larger factors, instead of repeating the same failure for every configuration.
 ### Bug Fixes
 * Solutions, checkpoints and config files are written atomically (temporary file, `fsync`, rename) by
   `bco_utils::save_to_file` and `write_config`. Rank 0 rewrites e.g. `ns_regrid.dat` under the same name

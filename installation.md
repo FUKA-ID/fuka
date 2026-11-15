@@ -38,13 +38,25 @@ factors) instead of the dense ScaLAPACK solve. Memory then grows with the number
 instead of the square of the number of unknowns, and the default binary ID runs need about a fifth
 of the nodes. Without MUMPS, FUKA builds and runs exactly as before (dense ScaLAPACK).
 
-1. Install MUMPS with METIS and ParMETIS, against the MPI and MKL/ScaLAPACK that FUKA uses. With
-   spack, e.g.
+1. Install MUMPS with METIS and ParMETIS, against the MPI and MKL/ScaLAPACK that FUKA uses, with
+   **64-bit indices in METIS, ParMETIS (and Scotch)**. With spack, e.g.
 
    ```
-   spack add 'mumps@5.8.1 +double ~complex ~float +metis +parmetis +openmp ~int64 ^<your mpi> ^<your scalapack/mkl>'
+   spack add 'metis@5.1.0 +int64' 'parmetis@4.0.3 +int64' 'scotch +int64 +mpi +esmumps ~metis'
+   spack add 'mumps@5.8.1 +double ~complex ~float +metis +parmetis +ptscotch +openmp ~int64 ^<your mpi> ^<your scalapack/mkl>'
    spack install
    ```
+
+   - The orderings need 64-bit indices for large Jacobians: MUMPS orders the graph of A + A^T, and
+     with 32-bit indices it stops with `INFOG(1) = -51` once that graph has more than 2^31 - 1 entries
+     (e.g. a Kerr-Schild binary with hole shells finer than (11, 11, 20), about 1.5e9 Jacobian
+     non-zeros). FUKA then falls back to MUMPS's internal AMF ordering, which works but gives larger
+     factors.
+   - MUMPS itself keeps its default 32-bit integers (`~int64`): it reads the index width of METIS from
+     `IDXTYPEWIDTH` in `metis.h` and that of Scotch from `scotch.h`, and calls them accordingly.
+   - PT-Scotch (`+ptscotch`) is optional. It makes a second parallel ordering available besides ParMETIS.
+   - Check: `codes/tests/newton_sparse/bin/Release/test_ordering_int64` prints the index widths MUMPS uses
+     and fails if they are not 64-bit (see `codes/tests/newton_sparse/README.md`).
 
 2. Before running `cmake` (or the `compile` scripts) for the library *and* for the solvers, set
 
