@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <utility>
 #include <vector>
 
 #include "array.hpp"
@@ -36,65 +35,6 @@ inline void append_column(Array<double> const& column,
             triplets.values.push_back(value);
         }
     }
-}
-
-/// True when the entries are sorted by column and then row without duplicates (as append_column builds them).
-inline bool sorted_by_column(SparseTriplets const& t) {
-    for (std::int64_t k = 1; k < t.size(); ++k)
-        if (t.cols[k] < t.cols[k - 1] ||
-            (t.cols[k] == t.cols[k - 1] && t.rows[k] <= t.rows[k - 1]))
-            return false;
-    return true;
-}
-
-/// Writes to @p u the union of the entries of @p t and the pattern (@p rows, @p cols), both sorted by column and
-/// then row: pattern positions missing from @p t become explicit zeros. @return the number of entries of @p t
-/// outside the pattern (0: the union is the pattern); @p zeros receives the number of zeros added.
-inline std::int64_t merge_with_pattern(SparseTriplets const& t,
-                                       std::vector<int> const& rows,
-                                       std::vector<int> const& cols,
-                                       SparseTriplets& u,
-                                       std::int64_t& zeros) {
-    std::int64_t const np = static_cast<std::int64_t>(rows.size());
-    u = SparseTriplets{};
-    u.rows.reserve(std::max<std::int64_t>(np, t.size()));
-    u.cols.reserve(u.rows.capacity());
-    u.values.reserve(u.rows.capacity());
-    std::int64_t i = 0, k = 0, outside = 0;
-    zeros = 0;
-    while (i < t.size() || k < np) {
-        bool take_t, take_p;
-        if (i == t.size()) {
-            take_t = false;
-            take_p = true;
-        } else if (k == np) {
-            take_t = true;
-            take_p = false;
-        } else {
-            std::int64_t const a =
-                (static_cast<std::int64_t>(t.cols[i]) << 32) | t.rows[i];
-            std::int64_t const b = (static_cast<std::int64_t>(cols[k]) << 32) |
-                                   rows[k];
-            take_t = a <= b;
-            take_p = b <= a;
-        }
-        if (take_t) {
-            u.rows.push_back(t.rows[i]);
-            u.cols.push_back(t.cols[i]);
-            u.values.push_back(t.values[i]);
-            if (!take_p)
-                ++outside;
-            ++i;
-        } else {
-            u.rows.push_back(rows[k]);
-            u.cols.push_back(cols[k]);
-            u.values.push_back(0.);
-            ++zeros;
-        }
-        if (take_p)
-            ++k;
-    }
-    return outside;
 }
 
 /// Largest |value| per row and per column (0-based, length n) of the local entries; the caller reduces the

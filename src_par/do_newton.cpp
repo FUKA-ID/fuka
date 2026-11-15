@@ -32,7 +32,6 @@
 
 #include <chrono>
 #include <algorithm>
-#include <map>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -378,22 +377,6 @@ void report_rank_times(char const* label, double time) {
 		          << " seconds (avg/min/max)" << std::endl;
 }
 
-/// Value of an environment variable on rank 0, broadcast so every rank takes the same branch.
-std::string env_on_root(char const* name, std::string const& fallback) {
-	int rank;
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	std::string value = fallback;
-	if (rank == 0 && std::getenv(name) != nullptr)
-		value = std::getenv(name);
-
-	int len = static_cast<int>(value.size());
-	MPI_Bcast(&len, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	value.resize(len);
-	if (len > 0)
-		MPI_Bcast(&value[0], len, MPI_CHAR, 0, MPI_COMM_WORLD);
-	return value;
-}
-
 /// Peak resident memory (VmHWM) per rank, per node (sum over its ranks) and in total, printed by rank 0 after each
 /// Newton step so runs can be sized to the fewest nodes; collective.
 void report_memory() {
@@ -423,115 +406,36 @@ void report_memory() {
 		          << std::endl;
 }
 
-#ifdef KADATH_USE_MUMPS
-/// KADATH_NEWTON_DUMP_PATTERN=<prefix>: write this rank's Jacobian entries of the first
-/// KADATH_NEWTON_DUMP_STEPS (default 3) MUMPS Newton steps with at least KADATH_NEWTON_DUMP_MIN_N (default 0)
-/// unknowns to <prefix>.step<k>.rank<r>.bin for offline analysis
-/// (layout: int32 n, int32 nproc, int64 count, int32 rows[count], int32 cols[count], double values[count];
-/// 1-based indices). Read-only diagnostic: the solve is unaffected.
-void dump_jacobian_pattern(int n, SparseTriplets const& local) {
-	static int step = 0;
-	std::string const prefix = env_on_root("KADATH_NEWTON_DUMP_PATTERN", "");
-	int const max_steps = std::stoi(env_on_root("KADATH_NEWTON_DUMP_STEPS", "3"));
-	int const min_n = std::stoi(env_on_root("KADATH_NEWTON_DUMP_MIN_N", "0"));
-	if (prefix.empty() || step >= max_steps || n < min_n)
-		return;
-
-	int rank, nproc;
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
-	std::string const name = prefix + ".step" + std::to_string(step) + ".rank" + std::to_string(rank) + ".bin";
-	std::ofstream out (name, std::ios::binary);
-	std::int64_t const count = local.size();
-	out.write(reinterpret_cast<char const*>(&n), sizeof(n));
-	out.write(reinterpret_cast<char const*>(&nproc), sizeof(nproc));
-	out.write(reinterpret_cast<char const*>(&count), sizeof(count));
-	out.write(reinterpret_cast<char const*>(local.rows.data()), count * sizeof(int));
-	out.write(reinterpret_cast<char const*>(local.cols.data()), count * sizeof(int));
-	out.write(reinterpret_cast<char const*>(local.values.data()), count * sizeof(double));
-	if (!out)
-		std::cerr << "rank " << rank << ": could not write " << name << std::endl;
-	if (rank == 0)
-		std::cout << "Jacobian pattern of Newton step " << step << " written to " << prefix << ".step" << step
-		          << ".rank*.bin" << std::endl;
-	++step;
-}
-#endif
-
 }  // namespace
 
 #ifdef KADATH_USE_MUMPS
 namespace {
 
-/// KADATH_NEWTON_PROFILE=1: phases of do_col_J / do_JX summed over all ranks since the last report, per call,
-/// with the metric part and (do_col_J) the most expensive definitions, summed over their domains.
-void report_phase_times(System_of_eqs const& syst, char const* what, System_of_eqs::Phase_times& times) {
-	int rank;
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	double local[10] = {times.setup, times.defs, times.eqs, times.exp, static_cast<double>(times.calls), times.met,
-	                    times.setup_zero, times.setup_double, times.setup_fill, times.setup_vd};
-	double sum[10];
-	MPI_Reduce(local, sum, 10, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-	int const ndef = syst.get_ndef();
-	std::vector<double> per_def(ndef, 0.);
-	if (static_cast<int>(times.per_def.size()) == ndef)
-		per_def = times.per_def;
-	std::vector<double> per_def_sum(ndef, 0.);
-	if (ndef > 0)
-		MPI_Reduce(per_def.data(), per_def_sum.data(), ndef, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-	times = System_of_eqs::Phase_times{};
-	if (rank != 0 || sum[4] <= 0.)
-		return;
-	double const calls = sum[4];
-	std::cout << "Profile: " << what << " phases per call (" << calls << " calls, all ranks): setup "
-	          << sum[0] / calls << " s";
-	if (sum[6] + sum[7] + sum[8] + sum[9] > 0.)
-		std::cout << " (variable domains " << sum[9] / calls << ", zeroing " << sum[6] / calls << ", numbers " << sum[7] / calls << ", column term "
-		          << sum[8] / calls << "; " << syst.get_nterm() << " terms, " << syst.get_nterm_cst() << " constants)";
-	std::cout << ", definitions+metric " << sum[1] / calls << " s (metric " << sum[5] / calls
-	          << " s), equations " << sum[2] / calls << " s, export " << sum[3] / calls << " s" << std::endl;
-	double total = 0.;
-	for (double t : per_def_sum)
-		total += t;
-	if (total <= 0.)
-		return;
-	// Sum over domains: the name without " (dom N)".
-	std::map<std::string, double> by_name;
-	std::map<std::string, int> n_doms;
-	for (int i = 0; i < ndef; ++i) {
-		std::string label = syst.def_label(i);
-		std::string const name = label.substr(0, label.rfind(" (dom"));
-		by_name[name] += per_def_sum[i];
-		n_doms[name]++;
-	}
-	std::vector<std::pair<double, std::string>> ranked;
-	for (auto const& [name, t] : by_name)
-		ranked.emplace_back(t, name + " [" + std::to_string(n_doms[name]) + " dom]");
-	std::sort(ranked.rbegin(), ranked.rend());
-	std::cout << "Profile: " << what << " definitions (" << ndef << " in " << by_name.size()
-	          << " names), share of definition time " << total / calls << " s per call:";
-	for (std::size_t k = 0; k < std::min<std::size_t>(ranked.size(), 15); ++k)
-		std::cout << (k ? "," : "") << " " << ranked[k].second << " " << 100. * ranked[k].first / total << " % ("
-		          << ranked[k].first / calls << " s)";
-	std::cout << std::endl;
-}
+/// Entries at most this fraction of both their row and their column maximum are dropped from every assembled
+/// Jacobian. About two thirds of a Kadath Jacobian are such round-off (sums of spectral terms that cancel); they
+/// only cost fill (BH: 47M -> 10M entries, analysis + factorization 122 -> 19 s). Tolerances 1e-16 ... 1e-13 left
+/// the BH Newton history and solution unchanged (parameters <= 1e-13 relative).
+constexpr double kJacobianNoise = 1e-14;
 
-/// std::to_string would print fallback with 6 decimals (1e-10 -> "0.000000"): parse the variable only when set.
-double env_double_on_root(char const* name, double fallback) {
-	std::string const value = env_on_root(name, "");
-	return value.empty() ? fallback : std::stod(value);
-}
+/// Newton-Krylov settings (validated on the BH, BBH, NS and BNS CI cases):
+constexpr int kGmresMaxIterations = 48;       ///< GMRES iterations before the preconditioner is refactored.
+constexpr double kEtaMin = 1e-8;              ///< Bounds of the Eisenstat-Walker forcing term.
+constexpr double kEtaMax = 1e-3;
+/// The preconditioner is factored from the Jacobian without entries below this fraction of their row and column
+/// maximum (about 75 % of the entries); the exact step is then finished by GMRES with the true J v.
+constexpr double kPreconditionerDrop = 1e-13;
+constexpr double kExactStepTolerance = 1e-10;  ///< GMRES tolerance of that exact step.
+/// MUMPS residual check of the dropped factors: GMRES with the true J v finishes the step, so a slightly
+/// inaccurate preconditioner must not send MUMPS down the retry ladder.
+constexpr double kPreconditionerResidual = 1e-6;
 
 /// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
 /// successful solver (with its factors) is returned in @p solver. Collective. @return 0 or the last status.
-/// @param drop_tolerance > 0 removes entries negligible relative to both their row and column maximum before
-/// factoring (drop_negligible): the factors and x then belong to a perturbed matrix, so only preconditioners
-/// may use it.
-/// @param residual_tolerance > 0 replaces a stricter MUMPS residual check (KADATH_MUMPS_RESIDUAL_TOL): for factors
-/// used only as a preconditioner, whose result GMRES checks against the true J v.
+/// @param drop_tolerance > kJacobianNoise removes more entries (drop_negligible): the factors and x then belong to
+/// a perturbed matrix, so only preconditioners may use it, and the MUMPS residual check is relaxed to
+/// kPreconditionerResidual.
 int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::vector<double>& x,
-                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.,
-                       double residual_tolerance = 0.) {
+                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.) {
 	int rank, nproc;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
@@ -540,26 +444,15 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	auto begin = std::chrono::system_clock::now();
 
 	SparseTriplets local;
-	// Round-robin columns (block 1): unknowns are ordered domain by domain, so every rank gets the same share of
-	// every domain and the per-domain cost differences of do_col_J average out.
-	int const column_block = std::max(1, std::stoi(env_on_root("KADATH_MUMPS_COLUMN_BLOCK", "1")));
-	for (int col : block_cyclic_columns(n, column_block, rank, nproc))
+	// Round-robin columns: unknowns are ordered domain by domain, so every rank gets the same share of every
+	// domain and the per-domain cost differences of do_col_J average out.
+	for (int col : block_cyclic_columns(n, 1, rank, nproc))
 		append_column(syst.do_col_J(col), col, local);
 	report_rank_times("Assemble sparse Jacobian", elapsed_time(begin));
-	if (syst.profile_phases)
+
+	bool const preconditioner = drop_tolerance > kJacobianNoise;
+	double const tolerance = std::max(drop_tolerance, kJacobianNoise);
 	{
-		report_phase_times(syst, "do_col_J", syst.times_col_J);
-		report_phase_times(syst, "sec_member", syst.times_sec);
-	}
-	dump_jacobian_pattern(n, local);
-	// Round-off entries: about half of a Kadath Jacobian is below 1e-16 of both its row and its column maximum
-	// (sums of spectral terms that cancel), two thirds below 1e-14. They only cost fill (BH: 47M -> 10M entries
-	// at 1e-14, analysis + factorization 122 -> 19 s) and change the pattern from step to step. Dropping at
-	// 1e-16 ... 1e-13 left the BH Newton history and the solution unchanged (parameters <= 1e-13 relative).
-	// KADATH_JACOBIAN_NOISE_DROP sets the tolerance (default 1e-14, 0 keeps every entry).
-	double const noise = env_double_on_root("KADATH_JACOBIAN_NOISE_DROP", 1e-14);
-	if ((drop_tolerance > 0.) || (noise > 0.)) {
-		double const tolerance = std::max(drop_tolerance, noise);
 		std::vector<double> row_max, col_max;
 		local_row_column_max(local, n, row_max, col_max);
 		MPI_Allreduce(MPI_IN_PLACE, row_max.data(), n, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
@@ -567,24 +460,21 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		counts[1] = drop_negligible(local, row_max, col_max, tolerance);
 		MPI_Allreduce(MPI_IN_PLACE, counts, 2, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 		if (rank == 0)
-			std::cout << (drop_tolerance > 0. ? "Preconditioner" : "Jacobian") << ": dropped " << counts[1] << " of "
+			std::cout << (preconditioner ? "Preconditioner" : "Jacobian") << ": dropped " << counts[1] << " of "
 			          << counts[0] << " entries (" << 100. * counts[1] / std::max(1LL, counts[0])
 			          << " %) at relative tolerance " << tolerance << std::endl;
 	}
 
 	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
-	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(MumpsOptions::from_env());
+	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(MumpsOptions());
 	int status = 0;
 	for (std::size_t attempt = 0; attempt < ladder.size(); ++attempt) {
 		x.assign(second.get_data(), second.get_data() + n);
 		MumpsOptions options = ladder[attempt].options;
-		options.residual_tolerance = std::max(options.residual_tolerance, residual_tolerance);
-		// The first attempt keeps the instance of the previous step (and with it the MUMPS analysis, see
-		// MumpsOptions::reuse_analysis) when its options allow; the retries always start afresh.
-		if (attempt > 0 || !solver || !solver->adopt_options(options)) {
-			solver.reset();
-			solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, options);
-		}
+		if (preconditioner)
+			options.residual_tolerance = std::max(options.residual_tolerance, kPreconditionerResidual);
+		solver.reset();
+		solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, options);
 		status = solver->solve(n, local, x);
 		if (rank == 0 && status != 0) {
 			MumpsStats const& f = solver->stats();
@@ -605,57 +495,25 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 
 	if (status == 0 && rank == 0) {
 		MumpsStats const& s = solver->stats();
-		double const dense = 1.0 * n * n;
-		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / dense << " % of dense), factors = "
-		          << s.factor_entries << " (fill " << 1.0 * s.factor_entries / s.nnz << "), flops = "
-		          << s.factor_flops << std::endl;
-		std::cout << "MUMPS: memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total
-		          << " MB, ordering = " << s.ordering_used << ", ICNTL(14) = " << s.mem_relax_used
-		          << ", ICNTL(23) = " << s.mem_budget_mb << " MB" << std::endl;
-		std::cout << "MUMPS: relative residual = " << s.relative_residual << ", pivots delayed = " << s.delayed_pivots
-		          << ", off-diagonal = " << s.off_diagonal_pivots
-		          << ", factor entries estimated/actual = " << s.estimated_factor_entries << " / " << s.factor_entries
-		          << std::endl;
-		std::cout << "Inverting the matrix: " << s.time_pattern + s.time_gather + s.time_analysis + s.time_factor_solve
-		          << " seconds (pattern " << s.time_pattern << ", gather " << s.time_gather << ", analysis "
-		          << (s.analysis_reused ? std::string("kept") : std::to_string(s.time_analysis)) << ", factor+solve "
-		          << s.time_factor_solve << ")";
-		if (s.pattern_zeros > 0)
-			std::cout << ", " << s.pattern_zeros << " explicit zeros keep the analysed pattern";
-		std::cout << std::endl;
+		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / (1.0 * n * n) << " % of dense), factors = "
+		          << s.factor_entries << ", memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total
+		          << " MB, relative residual = " << s.relative_residual << std::endl;
+		std::cout << "Inverting the matrix: " << s.time_gather + s.time_analysis + s.time_factor_solve
+		          << " seconds (gather " << s.time_gather << ", analysis " << s.time_analysis << ", factor+solve "
+		          << s.time_factor_solve << ")" << std::endl;
 	}
-
 	return status;
 }
 
-}  // namespace
-
-namespace {
-
-/// MUMPS instance of the exact sparse Newton steps, kept between the steps of one system for its analysis.
-struct ExactSolverState {
-	unsigned long syst_id = 0;
-	std::unique_ptr<MumpsSolver> solver;
-};
-
-ExactSolverState& exact_solver_state();
-
-/// Released in MPI_Finalize while MPI still works (see release_krylov_state).
-int release_exact_solver_state(MPI_Comm, int, void*, void*) {
-	exact_solver_state() = ExactSolverState{};
-	return MPI_SUCCESS;
-}
-
-ExactSolverState& exact_solver_state() {
-	static ExactSolverState state;
-	static bool registered = false;
-	if (!registered) {
-		registered = true;
-		int keyval;
-		MPI_Comm_create_keyval(MPI_COMM_NULL_COPY_FN, release_exact_solver_state, &keyval, nullptr);
-		MPI_Comm_set_attr(MPI_COMM_SELF, keyval, nullptr);
-	}
-	return state;
+/// Stops the run after every configuration of the retry ladder failed; collective.
+[[noreturn]] void abort_after_mumps_failure(int status) {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	if (rank == 0)
+		std::cout << "MUMPS failed with every configuration of the retry ladder (" << mumps_error_message(status)
+		          << "); stopping. KADATH_LINSOLVE=scalapack solves densely if memory allows." << std::endl;
+	MPI_Barrier(MPI_COMM_WORLD);
+	abort();
 }
 
 }  // namespace
@@ -665,28 +523,18 @@ Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& seco
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	int const n = syst.get_nbr_unknowns();
 	std::vector<double> x;
-	ExactSolverState& st = exact_solver_state();
-	if (st.syst_id != syst.get_instance_id()) {
-		st = ExactSolverState{};
-		st.syst_id = syst.get_instance_id();
-	}
-	int const status = sparse_newton_step(syst, second, x, st.solver);
-	if (status != 0)
-		st = ExactSolverState{};
-	else
-		st.solver->release_factors();  // only the analysis is needed for the next step
+	std::unique_ptr<MumpsSolver> solver;
+	int const status = sparse_newton_step(syst, second, x, solver);
 
 	if (status != 0) {
 		if (rank == 0 && (status == -6 || status == -10))
 			std::cout << "Jacobian is singular! Stopping. (" << mumps_error_message(status) << ")" << std::endl;
-		if (status_out != nullptr) {
-			*status_out = status;
-			Array<double> none (n);
-			none = 0.;
-			return none;
-		}
-		MPI_Barrier(MPI_COMM_WORLD);
-		abort();
+		if (status_out == nullptr)
+			abort_after_mumps_failure(status);
+		*status_out = status;
+		Array<double> none (n);
+		none = 0.;
+		return none;
 	}
 	if (status_out != nullptr)
 		*status_out = 0;
@@ -704,7 +552,6 @@ struct KrylovState {
 	unsigned long syst_id = 0;     ///< System_of_eqs::get_instance_id() of the factored system (0: none).
 	int n = 0;
 	std::unique_ptr<MumpsSolver> preconditioner;
-	int age = 0;                   ///< Newton steps since the preconditioner was factored.
 	double previous_norm = -1.;    ///< ||second||_2 of the previous step.
 	double previous_eta = -1.;     ///< Forcing term of the previous GMRES step (< 0: none).
 	NewtonKrylovStats stats;
@@ -743,15 +590,12 @@ void reset_newton_krylov() {
 
 /// Newton-Krylov after arXiv:2608.07653: GMRES with the matrix-free J v = do_JX(v), right-preconditioned by the
 /// MUMPS factors of an earlier Jacobian; Eisenstat-Walker forcing (choice 2, Eisenstat & Walker, SIAM J. Sci.
-/// Comput. 17, 16 (1996), eq. 2.6 with gamma = 0.9, alpha = 2, safeguard 3.4) bounded to [eta_min, eta_max].
-/// The preconditioner is refactored (an exact sparse Newton step) when absent, when n or the system (instance id) changed,
-/// when ||F|| grew, when it is older than KADATH_KRYLOV_MAX_AGE steps (0 = unlimited), or when GMRES does not
-/// converge within KADATH_KRYLOV_MAX_ITERATIONS. The fields only change after this returns, so a failed GMRES
-/// leaves the system untouched for the exact step. KADATH_KRYLOV_REFRESH=lazy tries GMRES with the kept
-/// factors before each of these refactorizations except age (see below).
-/// KADATH_KRYLOV_DROP > 0 factors the Jacobian without entries negligible in their row and column; the exact
-/// step is then solved by GMRES with the true J v to KADATH_KRYLOV_EXACT_TOL (1e-10), and refactored without
-/// dropping if that fails. The dropped factors only need MUMPS residual <= KADATH_KRYLOV_PRECOND_RESIDUAL_TOL (1e-6).
+/// Comput. 17, 16 (1996), eq. 2.6 with gamma = 0.9, alpha = 2, safeguard 3.4) bounded to [kEtaMin, kEtaMax].
+/// The preconditioner is refactored (an exact sparse Newton step) when absent, when n or the system (instance
+/// id) changed, when ||F|| grew, or when GMRES does not converge within kGmresMaxIterations. It is factored from
+/// the Jacobian without entries below kPreconditionerDrop; the exact step is then solved by GMRES with the true
+/// J v to kExactStepTolerance, and refactored without dropping if that fails. The fields only change after this
+/// returns, so a failed GMRES leaves the system untouched for the exact step.
 Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& second) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
@@ -763,18 +607,6 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 		norm += second(i) * second(i);
 	norm = std::sqrt(norm);
 	MPI_Bcast(&norm, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	int const max_iterations = std::stoi(env_on_root("KADATH_KRYLOV_MAX_ITERATIONS", "48"));
-	int const max_age = std::stoi(env_on_root("KADATH_KRYLOV_MAX_AGE", "0"));
-	double const eta_min = env_double_on_root("KADATH_KRYLOV_ETA_MIN", 1e-8);
-	double const eta_max = env_double_on_root("KADATH_KRYLOV_ETA_MAX", 1e-3);
-	double const drop = env_double_on_root("KADATH_KRYLOV_DROP", 0.);
-	double const exact_tolerance = env_double_on_root("KADATH_KRYLOV_EXACT_TOL", 1e-10);
-	// MUMPS residual check for the dropped (preconditioner-only) factors: GMRES with the true J v finishes the
-	// step to exact_tolerance, so a slightly inaccurate factorization must not send MUMPS down the retry ladder.
-	double const preconditioner_residual = env_double_on_root("KADATH_KRYLOV_PRECOND_RESIDUAL_TOL", 1e-6);
-	bool const lazy = env_on_root("KADATH_KRYLOV_REFRESH", "classic") == "lazy";
-	int const trial_iterations = std::stoi(env_on_root("KADATH_KRYLOV_TRIAL_ITERATIONS", "16"));
 
 	auto apply_j = [&syst, n](std::vector<double> const& v, std::vector<double>& w) {
 		Array<double> av (n);
@@ -794,7 +626,6 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	std::vector<double> const b (second.get_data(), second.get_data() + n);
 
 	std::string reason;  // why this step refactors (empty: GMRES with the kept preconditioner)
-	bool usable = st.preconditioner && st.preconditioner->has_factors() && st.n == n;  // can precondition J
 	if (!st.preconditioner || !st.preconditioner->has_factors())
 		reason = "no preconditioner";
 	else if (st.n != n)
@@ -803,49 +634,28 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 		reason = "new system";
 	else if (st.previous_norm > 0. && norm > st.previous_norm)
 		reason = "residual grew";
-	else if (max_age > 0 && st.age >= max_age) {
-		reason = "preconditioner too old";
-		usable = false;
-	}
-	// KADATH_KRYLOV_REFRESH=lazy: where the classic policy refactors although the kept factors still fit the
-	// matrix size, first try GMRES with them (at most KADATH_KRYLOV_TRIAL_ITERATIONS); refactor if that fails.
-	// The step still meets its forcing term with the true J v, so only the cost can change, not the accuracy.
-	int trial = (lazy && usable && !reason.empty()) ? 1 : 0;
-	MPI_Bcast(&trial, 1, MPI_INT, 0, MPI_COMM_WORLD);  // every rank takes the same (collective) branch
 	std::vector<double> x;
 
-	if (reason.empty() || trial) {
+	if (reason.empty()) {
 		double const gamma = 0.9, alpha = 2.;
-		double eta = eta_max;  // a trial step has no meaningful previous residual of this linearization
-		if (!trial) {
-			eta = gamma * std::pow(norm / st.previous_norm, alpha);
-			if (st.previous_eta > 0. && gamma * std::pow(st.previous_eta, alpha) > 0.1)
-				eta = std::max(eta, gamma * std::pow(st.previous_eta, alpha));
-			eta = std::min(eta_max, std::max(eta_min, eta));
-		}
+		double eta = gamma * std::pow(norm / st.previous_norm, alpha);
+		if (st.previous_eta > 0. && gamma * std::pow(st.previous_eta, alpha) > 0.1)
+			eta = std::max(eta, gamma * std::pow(st.previous_eta, alpha));
+		eta = std::min(kEtaMax, std::max(kEtaMin, eta));
 
 		auto begin = std::chrono::system_clock::now();
-		GmresResult const result =
-		    gmres(apply_j, apply_m, b, x, eta, trial ? std::min(trial_iterations, max_iterations) : max_iterations);
+		GmresResult const result = gmres(apply_j, apply_m, b, x, eta, kGmresMaxIterations);
 		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-		if (syst.profile_phases)
-			report_phase_times(syst, "do_JX", syst.times_JX);
 		double const t = elapsed_time(begin);
 
 		if (result.converged && preconditioner_status == 0) {
-			++st.age;
-			st.syst_id = syst.get_instance_id();
-			if (trial)
-				++st.stats.trial_successes;
 			st.previous_norm = norm;
 			st.previous_eta = eta;
 			++st.stats.krylov_steps;
 			st.stats.krylov_iterations += result.iterations;
 			if (rank == 0)
 				std::cout << "Newton-Krylov: GMRES " << result.iterations << " iterations, relative residual "
-				          << result.relative_residual << " <= forcing term " << eta << ", preconditioner age "
-				          << st.age << ", " << t << " seconds"
-				          << (trial ? " (trial with kept preconditioner instead of refactoring: " + reason + ")" : "")
+				          << result.relative_residual << " <= forcing term " << eta << ", " << t << " seconds"
 				          << std::endl;
 			Array<double> X (n);
 			for (int i = 0; i < n; ++i)
@@ -853,7 +663,7 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 			return X;
 		}
 		++st.stats.gmres_failures;
-		reason = trial ? reason + ", GMRES trial failed" : "GMRES missed the forcing term";
+		reason = "GMRES missed the forcing term";
 		if (rank == 0)
 			std::cout << "Newton-Krylov: GMRES did not reach " << eta << " in " << result.iterations
 			          << " iterations (relative residual " << result.relative_residual << ", preconditioner status "
@@ -861,18 +671,13 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	}
 
 	if (rank == 0)
-		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ", ||F|| = " << norm
-		          << ", previous " << st.previous_norm << ")" << std::endl;
-	// The kept MUMPS instance carries its analysis to the refactorization; another system or resolution gets a
-	// fresh one, so the analysed pattern never mixes the patterns of different systems.
-	if (st.n != n || st.syst_id != syst.get_instance_id())
-		st.preconditioner.reset();
-	int status = sparse_newton_step(syst, second, x, st.preconditioner, drop, (drop > 0.) ? preconditioner_residual : 0.);
-	if (status == 0 && drop > 0.) {
+		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ")" << std::endl;
+	int status = sparse_newton_step(syst, second, x, st.preconditioner, kPreconditionerDrop);
+	if (status == 0) {
 		// The factors belong to the dropped matrix: solve with the true J v, preconditioned by them.
 		preconditioner_status = 0;
 		auto begin = std::chrono::system_clock::now();
-		GmresResult const result = gmres(apply_j, apply_m, b, x, exact_tolerance, max_iterations);
+		GmresResult const result = gmres(apply_j, apply_m, b, x, kExactStepTolerance, kGmresMaxIterations);
 		MPI_Bcast(x.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		if (result.converged && preconditioner_status == 0) {
 			st.stats.krylov_iterations += result.iterations;
@@ -882,29 +687,18 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 				          << elapsed_time(begin) << " seconds" << std::endl;
 		} else {
 			if (rank == 0)
-				std::cout << "Newton-Krylov: GMRES with the dropped preconditioner did not reach " << exact_tolerance
-				          << " (relative residual " << result.relative_residual << ", preconditioner status "
-				          << preconditioner_status << "); refactoring without dropping" << std::endl;
+				std::cout << "Newton-Krylov: GMRES with the dropped preconditioner did not reach "
+				          << kExactStepTolerance << " (relative residual " << result.relative_residual
+				          << "); refactoring without dropping" << std::endl;
 			status = sparse_newton_step(syst, second, x, st.preconditioner);
 		}
 	}
 	if (status != 0) {
 		st = KrylovState{};
-		if (env_on_root("KADATH_MUMPS_FALLBACK", "abort") != "scalapack") {
-			if (rank == 0)
-				std::cout << "MUMPS failed with every configuration of the retry ladder (last INFOG(1) = " << status
-				          << "); stopping." << std::endl;
-			MPI_Barrier(MPI_COMM_WORLD);
-			abort();
-		}
-		if (rank == 0)
-			std::cout << "WARNING: MUMPS failed (INFOG(1) = " << status
-			          << "); this Newton step falls back to the dense ScaLAPACK solver" << std::endl;
-		return newton_update_scalapack(syst, second, System_of_eqs::NEWTON_RAPHSON);
+		abort_after_mumps_failure(status);
 	}
 	st.syst_id = syst.get_instance_id();
 	st.n = n;
-	st.age = 0;
 	st.previous_norm = norm;
 	st.previous_eta = -1.;
 	++st.stats.refactorizations;
@@ -916,186 +710,66 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 }
 #endif
 
-void report_newton_memory() {
-	report_memory();
-}
-
 NewtonBackend newton_backend_from_env() {
+	int rank;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 #ifdef KADATH_USE_MUMPS
-	std::string const fallback = "mumps";
+	std::string choice = "krylov";
 #else
-	std::string const fallback = "scalapack";
+	std::string choice = "scalapack";
 #endif
-	std::string const choice = env_on_root("KADATH_LINSOLVE", fallback);
+	if (rank == 0 && std::getenv("KADATH_LINSOLVE") != nullptr)
+		choice = std::getenv("KADATH_LINSOLVE");
+	int len = static_cast<int>(choice.size());
+	MPI_Bcast(&len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	choice.resize(len);
+	if (len > 0)
+		MPI_Bcast(&choice[0], len, MPI_CHAR, 0, MPI_COMM_WORLD);
+
 	if (choice == "scalapack")
 		return NewtonBackend::SCALAPACK;
 #ifdef KADATH_USE_MUMPS
+	if (choice == "krylov")
+		return NewtonBackend::KRYLOV;
 	if (choice == "mumps")
 		return NewtonBackend::MUMPS;
 #endif
-	int rank;
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	if (rank == 0)
 		std::cerr << "KADATH_LINSOLVE=" << choice << " is not available in this build (use scalapack"
 #ifdef KADATH_USE_MUMPS
-		          << " or mumps"
+		          << ", krylov or mumps"
 #endif
 		          << ")" << std::endl;
 	MPI_Barrier(MPI_COMM_WORLD);
 	abort();
 }
 
-bool newton_compare_from_env() {
-	return env_on_root("KADATH_LINSOLVE_COMPARE", "0") == "1";
-}
-
-namespace {
-
-/// KADATH_NEWTON_PROFILE=1: cost of one Jacobian column (do_col_J) vs one matrix-free product (do_JX) and a
-/// values-only residual (sec_member), and the consistency |do_JX(dx) - second| / |second| (J dx = second).
-/// Called after the update is computed and before the fields change, so the solve is unaffected.
-void profile_newton_operators(System_of_eqs& syst, Array<double> const& second, Array<double> const& dx) {
-	int rank;
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	int const n = syst.get_nbr_unknowns();
-	std::vector<int> const probes = {0, n / 4, n / 2, (3 * n) / 4, n - 1};
-
-	auto begin = std::chrono::system_clock::now();
-	for (int col : probes)
-		syst.do_col_J(col);
-	double const t_col = elapsed_time(begin) / probes.size();
-
-	begin = std::chrono::system_clock::now();
-	Array<double> const jx (syst.do_JX(dx));
-	double const t_jx = elapsed_time(begin);
-
-	// Values-only evaluation of every equation (no derivatives): bounds the primal share of a column pass.
-	begin = std::chrono::system_clock::now();
-	syst.sec_member();
-	double const t_res = elapsed_time(begin);
-
-	double diff = 0., ref = 0.;
-	for (int i = 0; i < second.get_size(0); ++i) {
-		diff = std::max(diff, std::fabs(jx(i) - second(i)));
-		ref = std::max(ref, std::fabs(second(i)));
-	}
-	if (rank == 0)
-		std::cout << "Profile: do_col_J = " << t_col << " s/column (" << probes.size() << " columns), do_JX = " << t_jx
-		          << " s (= " << t_jx / t_col << " columns), max|J dx - second| / max|second| = "
-		          << (ref > 0. ? diff / ref : diff) << ", sec_member (values only, all domains) = " << t_res << " s"
-		          << std::endl;
-
-	// do_JX(e_j) against the assembled column j, each after a do_col_J of another column (stale derivative
-	// state): the first columns are the number unknowns (no variable domains), then evenly spaced columns.
-	std::vector<int> columns = {0, 1, 2};
-	int const spaced = std::stoi(env_on_root("KADATH_NEWTON_PROFILE_COLUMNS", "24"));
-	for (int k = 1; k <= spaced; ++k)
-		columns.push_back(static_cast<int>((static_cast<long long>(n - 1) * k) / spaced));
-	double worst = 0.;
-	int worst_col = -1;
-	for (std::size_t k = 0; k < columns.size(); ++k) {
-		int const col = std::min(columns[k], n - 1);
-		syst.do_col_J(columns[(k + 1) % columns.size()] % n);
-		Array<double> e (n);
-		e = 0.;
-		e.set(col) = 1.;
-		Array<double> const jv (syst.do_JX(e));
-		Array<double> const jc (syst.do_col_J(col));
-		double d = 0., r = 0.;
-		int row = -1;
-		for (int i = 0; i < jc.get_size(0); ++i) {
-			if (std::fabs(jv(i) - jc(i)) > d) {
-				d = std::fabs(jv(i) - jc(i));
-				row = i;
-			}
-			r = std::max(r, std::fabs(jc(i)));
-		}
-		double const rel = r > 0. ? d / r : d;
-		if (rank == 0 && rel > 1e-12)
-			std::cout << "Profile: do_JX(e_" << col << ") differs from do_col_J(" << col << "): max|diff| = " << d
-			          << " at row " << row << " (do_col_J " << jc(row) << ", do_JX " << jv(row) << "), relative "
-			          << rel << "; column: " << syst.column_label() << "; row: " << syst.row_label(row) << std::endl;
-		if (rel > worst) {
-			worst = rel;
-			worst_col = col;
-		}
-	}
-	if (rank == 0)
-		std::cout << "Profile: do_JX(e_j) vs do_col_J(j) over " << columns.size() << " columns: worst relative "
-		          << worst << " (column " << worst_col << ")" << std::endl;
-}
-
-}  // namespace
-
 Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, System_of_eqs::SOLVER solver) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	[[maybe_unused]] NewtonBackend const backend =
+	NewtonBackend const backend =
 	    (solver == System_of_eqs::GAUSS_NEWTON) ? NewtonBackend::SCALAPACK : newton_backend_from_env();
-	// KADATH_JACOBIAN_SKIP_CLEAN=0: do_col_J recomputes definitions and metric in every domain (old behaviour).
-	syst.skip_clean_domains = env_on_root("KADATH_JACOBIAN_SKIP_CLEAN", "1") == "1";
-	// KADATH_JACOBIAN_PRUNE=0: do_col_J recomputes operator subtrees with a zero derivative (old behaviour).
-	syst.prune_zero_derivatives = env_on_root("KADATH_JACOBIAN_PRUNE", "1") == "1";
-	// KADATH_JACOBIAN_LINEAR=0: linear nodes with a non-zero derivative recompute their value too.
-	syst.prune_linear = env_on_root("KADATH_JACOBIAN_LINEAR", "1") == "1";
-	// KADATH_JACOBIAN_FAST_SETUP=0: do_col_J builds the derivative of every term to locate the column.
-	syst.fast_column_setup = env_on_root("KADATH_JACOBIAN_FAST_SETUP", "1") == "1";
-	// KADATH_JX_SHORTCUTS=0: do_JX recomputes every value (no pruning or linear nodes).
-	syst.jx_shortcuts = env_on_root("KADATH_JX_SHORTCUTS", "1") == "1";
-	syst.profile_phases = env_on_root("KADATH_NEWTON_PROFILE", "0") != "0";  // 2: phases only, no extra probes
 
 	Array<double> X (syst.get_nbr_unknowns());
+	switch (backend) {
 #ifdef KADATH_USE_MUMPS
-	if (backend == NewtonBackend::MUMPS && env_on_root("KADATH_NEWTON_METHOD", "newton") == "krylov") {
-		if (rank == 0)
-			std::cout << "Newton linear solver: Newton-Krylov (GMRES + MUMPS preconditioner)" << std::endl;
-		X = newton_update_krylov(syst, second);
-		if (solver == System_of_eqs::NEWTON_RAPHSON && env_on_root("KADATH_NEWTON_PROFILE", "0") == "1")
-			profile_newton_operators(syst, second, X);
-		return X;
-	}
-	if (backend == NewtonBackend::MUMPS) {
-		if (rank == 0)
-			std::cout << "Newton linear solver: MUMPS (sparse)" << std::endl;
-		int status = 0;
-		X = newton_update_mumps(syst, second, &status);
-		if (status != 0) {
-			// Dense ScaLAPACK only on request: it re-assembles the Jacobian and needs n^2 memory.
-			if (env_on_root("KADATH_MUMPS_FALLBACK", "abort") != "scalapack") {
-				if (rank == 0)
-					std::cout << "MUMPS failed with every configuration of the retry ladder (last INFOG(1) = " << status
-					          << "); stopping. KADATH_MUMPS_FALLBACK=scalapack redoes such steps densely." << std::endl;
-				MPI_Barrier(MPI_COMM_WORLD);
-				abort();
-			}
+		case NewtonBackend::KRYLOV:
 			if (rank == 0)
-				std::cout << "WARNING: MUMPS failed (INFOG(1) = " << status
-				          << "); this Newton step falls back to the dense ScaLAPACK solver" << std::endl;
-			return newton_update_scalapack(syst, second, solver);
-		}
-
-		if (newton_compare_from_env()) {
-			Array<double> X_dense (newton_update_scalapack(syst, second, solver));
-			double diff = 0., ref = 0.;
-			for (int i = 0; i < X.get_size(0); ++i) {
-				diff = std::max(diff, std::fabs(X(i) - X_dense(i)));
-				ref = std::max(ref, std::fabs(X_dense(i)));
-			}
+				std::cout << "Newton linear solver: Newton-Krylov (GMRES + MUMPS preconditioner)" << std::endl;
+			X = newton_update_krylov(syst, second);
+			break;
+		case NewtonBackend::MUMPS:
 			if (rank == 0)
-				std::cout << "Backend comparison: max|dx_mumps - dx_scalapack| / max|dx_scalapack| = "
-				          << (ref > 0. ? diff / ref : diff) << std::endl;
-		}
-	}
-	else
+				std::cout << "Newton linear solver: MUMPS (sparse)" << std::endl;
+			X = newton_update_mumps(syst, second);
+			break;
 #endif
-	{
-		if (rank == 0)
-			std::cout << "Newton linear solver: ScaLAPACK (dense)" << std::endl;
-		X = newton_update_scalapack(syst, second, solver);
+		default:
+			if (rank == 0)
+				std::cout << "Newton linear solver: ScaLAPACK (dense)" << std::endl;
+			X = newton_update_scalapack(syst, second, solver);
 	}
-
-	if (solver == System_of_eqs::NEWTON_RAPHSON && env_on_root("KADATH_NEWTON_PROFILE", "0") == "1")
-		profile_newton_operators(syst, second, X);
+	report_memory();
 	return X;
 }
 
@@ -1162,7 +836,6 @@ bool System_of_eqs::do_newton(double precision, double& error, System_of_eqs::SO
 	}
 
 	Array<double> X (linear_solvers::newton_update(*this, second, solver));
-	linear_solvers::report_newton_memory();
 
 	auto begin = std::chrono::system_clock::now();
 

@@ -14,13 +14,12 @@
  *  T3d do_col_J skipping definitions/metric of untouched domains is bitwise identical to recomputing all
  *  T3c the same with variable domains (shape unknowns): Space_spheric_adapted (adapted shells, Galerkin
  *      shape coefficients) and Space_adapted_bh (homothetic shells, as in the BH solver)
- *  T4a one Newton update: MUMPS (centralized and distributed input) vs ScaLAPACK, relative difference < 1e-10
+ *  T3e do_JX with the do_col_J shortcuts (outside variable domains) agrees with do_JX without them
+ *  T4a one Newton update: MUMPS vs ScaLAPACK, relative difference < 1e-10
  *  T4b full solves with KADATH_LINSOLVE=mumps and =scalapack from the same guess: same iteration count,
  *      matching error history, same lam and P, and both agree with the analytic solution
- *  T4d Newton-Krylov (GMRES + kept MUMPS factors) converges to the exact-Newton solution within tolerance
- *  T4f T4d with KADATH_KRYLOV_REFRESH=lazy (GMRES trial before refactoring): same solution
- *  T4e T4d with a preconditioner from a coarsely dropped Jacobian (KADATH_KRYLOV_DROP=1e-3): same solution
- *  T4c a rejected MUMPS solution (residual tolerance 0) falls back to ScaLAPACK step by step: bitwise identical
+ *  T4d Newton-Krylov (KADATH_LINSOLVE=krylov, the default) converges to the exact-Newton solution within
+ *      tolerance, with at least one step solved by GMRES with a kept preconditioner
  *
  * Run with 1 and 4 MPI ranks; returns 0 if all checks pass (77 = skipped, built without MUMPS).
  */
@@ -405,15 +404,9 @@ void test_single_update() {
 
     Array<double> const dense(
         newton_update_scalapack(syst, second, System_of_eqs::NEWTON_RAPHSON));
-    for (char const* input : {"centralized", "distributed"}) {
-        setenv("KADATH_MUMPS_INPUT", input, 1);
-        Array<double> const sparse(newton_update_mumps(syst, second));
-        double const d = rel_diff(sparse, dense);
-        check(d < 1e-10,
-              std::string("T4a Newton update, ") + input +
-                  " input: rel. diff = " + sci(d));
-    }
-    unsetenv("KADATH_MUMPS_INPUT");
+    Array<double> const sparse(newton_update_mumps(syst, second));
+    double const d = rel_diff(sparse, dense);
+    check(d < 1e-10, "T4a Newton update: rel. diff = " + sci(d));
 }
 
 struct SolveResult {
@@ -449,7 +442,7 @@ SolveResult solve_with(char const* backend) {
     return result;
 }
 
-/// Returns the ScaLAPACK reference solve for test_fallback.
+/// Returns the ScaLAPACK reference solve for test_krylov.
 SolveResult test_full_solve() {
     SolveResult const sparse = solve_with("mumps");
     SolveResult dense = solve_with("scalapack");
@@ -487,57 +480,18 @@ SolveResult test_full_solve() {
     return dense;
 }
 
-/// T4c: with KADATH_MUMPS_RESIDUAL_TOL=0 every attempt of the retry ladder is rejected by the residual check; with
-/// KADATH_MUMPS_FALLBACK=scalapack each Newton step must then be redone densely, reproducing the ScaLAPACK solve.
-void test_fallback(SolveResult const& dense) {
-    setenv("KADATH_MUMPS_RESIDUAL_TOL", "0", 1);
-    setenv("KADATH_MUMPS_FALLBACK", "scalapack", 1);
-    {
-        Problem problem;
-        problem.syst.vars_to_terms();
-        Array<double> const second(problem.syst.sec_member());
-        int status = 0;
-        newton_update_mumps(problem.syst, second, &status);
-        check(status == kInaccurateSolution,
-              "T4c MUMPS solution rejected by the residual check: status " +
-                  std::to_string(status));
-    }
-    SolveResult const fallback = solve_with("mumps");
-    unsetenv("KADATH_MUMPS_RESIDUAL_TOL");
-    unsetenv("KADATH_MUMPS_FALLBACK");
-
-    check(fallback.converged && fallback.iterations == dense.iterations,
-          "T4c fallback solve converged in the same " +
-              std::to_string(dense.iterations) + " steps");
-    bool same = fallback.errors == dense.errors && fallback.lam == dense.lam &&
-                fallback.samples == dense.samples;
-    check(same,
-          "T4c fallback solve bitwise identical to the ScaLAPACK solve "
-          "(errors, lam, P)");
-}
-
-/// T4d: Newton-Krylov (KADATH_NEWTON_METHOD=krylov) must converge to the exact-Newton solution within the Newton
+/// T4d: Newton-Krylov (KADATH_LINSOLVE=krylov) must converge to the exact-Newton solution within the Newton
 /// tolerance (not bitwise: its iterates differ), with at least one step solved by preconditioned GMRES.
-void test_krylov(SolveResult const& dense, std::string const& t, char const* drop = nullptr,
-                 bool lazy = false) {
+void test_krylov(SolveResult const& dense, std::string const& t) {
     reset_newton_krylov();
-    setenv("KADATH_NEWTON_METHOD", "krylov", 1);
-    if (drop != nullptr)
-        setenv("KADATH_KRYLOV_DROP", drop, 1);
-    if (lazy)
-        setenv("KADATH_KRYLOV_REFRESH", "lazy", 1);
-    SolveResult const krylov = solve_with("mumps");
-    unsetenv("KADATH_NEWTON_METHOD");
-    unsetenv("KADATH_KRYLOV_DROP");
-    unsetenv("KADATH_KRYLOV_REFRESH");
+    SolveResult const krylov = solve_with("krylov");
     NewtonKrylovStats const stats = newton_krylov_stats();
     if (rank_ == 0)
         std::cout << t << " Newton-Krylov: " << krylov.iterations
                   << " Newton steps, " << stats.krylov_steps << " by GMRES ("
                   << stats.krylov_iterations << " iterations), "
                   << stats.refactorizations << " refactorizations, "
-                  << stats.gmres_failures << " GMRES failures, "
-                  << stats.trial_successes << " refactorizations avoided by trials" << std::endl;
+                  << stats.gmres_failures << " GMRES failures" << std::endl;
 
     check(krylov.converged,
           t + " Newton-Krylov converged in " +
@@ -572,9 +526,6 @@ int main(int argc, char** argv) {
     test_jx_variable_domains<Space_adapted_bh>("homothetic shells (BH)");
     test_single_update();
     SolveResult const dense = test_full_solve();
-    test_fallback(dense);
-    test_krylov(dense, "T4e", "1e-3");
-    test_krylov(dense, "T4f", nullptr, true);
     test_krylov(dense, "T4d");  // last: exercises the release in MPI_Finalize
 
     if (rank_ == 0)

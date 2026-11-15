@@ -19,20 +19,11 @@
 */
 
 #include <algorithm>
-#include <chrono>
-#include <typeinfo>
 #include "system_of_eqs.hpp"
 #include "scalar.hpp"
 #include "metric.hpp"
 #include "metric_nophi.hpp"
 namespace Kadath {
-namespace {
-/// Seconds since the first call; only used when System_of_eqs::profile_phases is set.
-double phase_clock() {
-	static auto const start = std::chrono::steady_clock::now() ;
-	return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() ;
-}
-}
 Array<double> System_of_eqs::check_equations() {
 
 	
@@ -67,41 +58,20 @@ Array<double> System_of_eqs::sec_member() {
 	prune_active = false ;
 
 	der_clean.clear() ;
-	double t_phase = profile_phases ? phase_clock() : 0. ;
-	auto lap = [&](double& acc) {
-		if (profile_phases) {
-			double const now = phase_clock() ;
-			acc += now - t_phase ;
-			t_phase = now ;
-		}
-	} ;
-	if (profile_phases && static_cast<int>(times_sec.per_def.size())!=ndef)
-		times_sec.per_def.assign(ndef, 0.) ;
 
 	vars_to_terms() ;
-	lap(times_sec.setup) ;
 	record_values = prune_zero_derivatives && prune_linear ;
 
 	if (met!=0x0)
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		met->update(d) ;
-	double const t_defs = t_phase ;
-	lap(times_sec.met) ;
-	for (int i=0 ; i<ndef ; i++) {
+	for (int i=0 ; i<ndef ; i++)
 		def[i]->compute_res() ;
-		if (profile_phases)
-			lap(times_sec.per_def[i]) ;
-	}
-	if (profile_phases)
-		times_sec.defs += t_phase - t_defs ;
 
 	int conte = 0 ;
 	for (int i=0 ; i<neq ; i++)
 	     eq[i]->apply(conte, results) ;
-	lap(times_sec.eqs) ;
 	record_values = false ;
-	if (profile_phases)
-		times_sec.calls ++ ;
 
 	// Need to assert the size :
 	if (nbr_conditions==-1) {
@@ -147,14 +117,6 @@ void System_of_eqs::find_variable_domains() {
 
 Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 
-	double t_phase = profile_phases ? phase_clock() : 0. ;
-	auto lap = [&](double& acc) {
-		if (profile_phases) {
-			double const now = phase_clock() ;
-			acc += now - t_phase ;
-			t_phase = now ;
-		}
-	} ;
 	der_clean.clear() ;
 	find_variable_domains() ;
 	xx_to_ders(xx) ;
@@ -187,22 +149,16 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 		for (int d : variable_domains)
 			prune_skip_mask[d] = 1 ;
 	}
-	lap(times_JX.setup) ;
-	double const t_met = profile_phases ? phase_clock() : 0. ;
 	if (met!=0x0)  
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		met->update(d) ;
-	if (profile_phases)
-		times_JX.met += phase_clock() - t_met ;
 	// Delete the definitions 
 	for (int i=0 ; i<ndef ; i++)
 		def[i]->compute_res() ;
-	lap(times_JX.defs) ;
 
 	int conte = 0 ;
 	for (int i=0 ; i<neq ; i++)  
 	    eq[i]->apply(conte, results) ;
-	lap(times_JX.eqs) ;
 	
 	if (nbr_conditions==-1) {
 		cerr << "Number of conditions unknown ; call sec_member first" << endl ;
@@ -222,32 +178,12 @@ Array<double> System_of_eqs::do_JX (const Array<double>& xx) {
 	    eq[i]->export_der(conte, results, res, pos_res) ;
 	prune_active = false ;
 	prune_skip_mask.clear() ;
-	lap(times_JX.exp) ;
-	if (profile_phases)
-		times_JX.calls ++ ;
 	return res ;
 }
 
 Array<double> System_of_eqs::do_col_J (int cc) {
 
 	assert ((cc>=0) && (cc<nbr_unknowns)) ;
-	double t_phase = profile_phases ? phase_clock() : 0. ;
-	auto lap = [&](double& acc) {
-		if (profile_phases) {
-			double const now = phase_clock() ;
-			acc += now - t_phase ;
-			t_phase = now ;
-		}
-	} ;
-
-	double t_setup = t_phase ;
-	auto setup_lap = [&](double& acc) {
-		if (profile_phases) {
-			double const now = phase_clock() ;
-			acc += now - t_setup ;
-			t_setup = now ;
-		}
-	} ;
 	// Affecte nterms derivatives :
 	int conte = 0 ;
 	int zedom = -1 ;
@@ -263,16 +199,10 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 		vd_clean = (zedoms(0)==-1) && (zedoms(1)==-1) ;
 		vd_clean_generation = field_generation ;
 	}
-	setup_lap(times_col_J.setup_vd) ;
 	column_stamp ++ ;
 	prune_active = prune_zero_derivatives ;
 	prune_skip_dom[0] = zedoms(0) ;
 	prune_skip_dom[1] = zedoms(1) ;
-	last_col_var = -1 ;
-	last_col_double = -1 ;
-	last_col_dom = -1 ;
-	last_col_zedoms[0] = zedoms(0) ;
-	last_col_zedoms[1] = zedoms(1) ;
 	if (zedoms(0)!=-1)
 	  update_terms_from_variable_domains(zedoms) ;
 	else {
@@ -281,7 +211,6 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	  for (int i=0 ; i<nterm ; i++)
 	    term[i]->set_der_zero() ;
 	}
-	setup_lap(times_col_J.setup_zero) ;
 	
 	// Double 
 	for (int i=0 ; i<nvar_double ; i++) {
@@ -289,14 +218,12 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			for (int dd=dom_min ; dd<=dom_max ; dd++)
 				term_double[i*ndom+(dd-dom_min)]->set_der_d(1.) ;
 			is_var_double = true ;
-			last_col_double = i ;
 		}
 		else
 			for (int dd=dom_min ; dd<=dom_max ; dd++)
 				term_double[i*ndom+(dd-dom_min)]->set_der_d(0.) ;
 		conte ++ ;
 	}
-	setup_lap(times_col_J.setup_double) ;
 
 	// Fields
 	// Terms that do not hold coefficient cc keep the derivative they have (zero or from the variable domains).
@@ -325,18 +252,13 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			// Si la base n'est pas affectee on la met
 			if ((!auxi(auxi.indices(j))(dom).check_if_zero()) && (!auxi(auxi.indices(j))(dom).get_base().is_def()))
 				auxi.set(auxi.indices(j)).set_domain(dom).set_base() = term[i]->get_val_t()(auxi.indices(j))(dom).get_base() ;
-			if ((zedom==-1) && (!auxi(auxi.indices(j))(dom).check_if_zero())) {
+			if ((zedom==-1) && (!auxi(auxi.indices(j))(dom).check_if_zero()))
 				zedom = dom ;
-				last_col_dom = dom ;
-				last_col_var = i / ndom ;
-			}
 		}
 
 		term[i]->set_der_t(auxi + term[i]->get_der_t()) ;
 	}
-	setup_lap(times_col_J.setup_fill) ;
 	
-	lap(times_col_J.setup) ;
 	// Metric quantities and definitions: only where they can have changed. In a domain not touched by
 	// this column every term has a zero derivative, so they keep their values with a zero derivative; if
 	// that is what they already hold (der_clean) there is nothing to recompute.
@@ -348,28 +270,14 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	auto todo = [&](int d) {
 		return !skip || (d<dom_min) || (d>dom_max) || active(d) || !der_clean[d-dom_min] ;
 	} ;
-	double t_sub = profile_phases ? phase_clock() : 0. ;
-	auto sub = [&](double& acc) {
-		if (profile_phases) {
-			double const now = phase_clock() ;
-			acc += now - t_sub ;
-			t_sub = now ;
-		}
-	} ;
-	if (profile_phases && static_cast<int>(times_col_J.per_def.size())!=ndef)
-		times_col_J.per_def.assign(ndef, 0.) ;
 	if (met!=0x0)
 	  for (int d=dom_min ; d<=dom_max ; d++)
 		if (todo(d))
 			met->update(d) ;
-	sub(times_col_J.met) ;
 
 	for (int i=0 ; i<ndef ; i++)
-		if (todo(def[i]->get_dom())) {
+		if (todo(def[i]->get_dom()))
 			def[i]->compute_res() ;
-			if (profile_phases)
-				sub(times_col_J.per_def[i]) ;
-		}
 
 	if (track) {
 		der_clean.assign(ndom, 1) ;
@@ -379,7 +287,6 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	}
 	else
 		der_clean.clear() ;
-	lap(times_col_J.defs) ;
 
 	conte = 0 ;
 	for (int i=0 ; i<neq ; i++) {
@@ -390,7 +297,6 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 			conte += eq[i]->n_ope ;
 	}
 		
-	lap(times_col_J.eqs) ;
 	if (nbr_conditions==-1) {
 		cerr << "Number of conditions unknown ; call sec_member first" << endl ;
 		abort() ;
@@ -417,9 +323,6 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	}
 	
 	prune_active = false ;
-	lap(times_col_J.exp) ;
-	if (profile_phases)
-		times_col_J.calls ++ ;
 	return res ;
 }
 
@@ -451,31 +354,4 @@ void System_of_eqs::update_terms_from_variable_domains(const Array<int>& zedoms)
 	  } 
 }
 
-std::string System_of_eqs::column_label () const {
-	std::string res ;
-	if (last_col_double!=-1)
-		res = std::string("number ") + names_var_double[last_col_double] ;
-	else if (last_col_var!=-1)
-		res = std::string("field ") + names_var[last_col_var] + " (dom " + std::to_string(last_col_dom) + ")" ;
-	else if (last_col_zedoms[0]!=-1)
-		res = "shape of domains " + std::to_string(last_col_zedoms[0]) + "," + std::to_string(last_col_zedoms[1]) ;
-	else
-		res = "no term (regularity / zero coefficient)" ;
-	return res ;
-}
-
-std::string System_of_eqs::row_label (int row) const {
-	if (row<0)
-		return "none" ;
-	if (row<neq_int)
-		return "integral equation " + std::to_string(row) ;
-	int pos = neq_int ;
-	for (int i=0 ; i<neq ; i++) {
-		int const nc = eq[i]->get_n_cond_tot() ;
-		if (row<pos+nc)
-			return "equation " + std::to_string(i) + " (" + typeid(*eq[i]).name() + ", dom " + std::to_string(eq[i]->ndom) + ", condition " + std::to_string(row-pos) + " of " + std::to_string(nc) + ")" ;
-		pos += nc ;
-	}
-	return "beyond the equations" ;
-}
 }

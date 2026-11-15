@@ -165,32 +165,6 @@ class System_of_eqs {
 	long term_coef_generation = -1 ; ///< \c field_generation of \c term_coef_end.
 	/// @return true if the metric is flat (its derivative is always zero).
 	bool has_flat_metric () const ;
-	/// Wall time spent in the phases of do_col_J / do_JX, accumulated while \c profile_phases is set.
-	struct Phase_times {
-		double setup = 0. ; ///< Derivatives of the unknowns (terms, variable domains).
-		double setup_vd = 0. ; ///< Part of \c setup: locating the column among the variable domains (do_col_J).
-		double setup_zero = 0. ; ///< Part of \c setup: zeroing the derivatives (do_col_J).
-		double setup_double = 0. ; ///< Part of \c setup: number unknowns (do_col_J).
-		double setup_fill = 0. ; ///< Part of \c setup: coefficient count and the derivative of the column's term.
-		double defs = 0. ; ///< Metric quantities and definitions.
-		double met = 0. ; ///< Part of \c defs spent in the metric update.
-		std::vector<double> per_def ; ///< Part of \c defs spent in each definition (do_col_J only, index as \c def).
-		double eqs = 0. ; ///< Evaluation of the equations.
-		double exp = 0. ; ///< Export of the derivatives to the result (incl. integral equations).
-		long calls = 0 ;
-	} ;
-	bool profile_phases = false ; ///< Accumulate \c times_col_J and \c times_JX.
-	Phase_times times_col_J ; ///< Phases of do_col_J.
-	Phase_times times_JX ; ///< Phases of do_JX.
-	Phase_times times_sec ; ///< Phases of sec_member (values only; setup = vars_to_terms).
-	int get_ndef () const {return ndef ;} ; ///< Number of definitions.
-	/// Name and domain of definition \c i.
-	std::string def_label (int i) const {return std::string(names_def[i]) + " (dom " + std::to_string(def[i]->get_dom()) + ")" ;} ;
-	/// What the last do_col_J perturbed: unknown field (-1: none), number unknown (-1: none), domain of the field
-	/// coefficient, moving variable domains (-1: none).
-	int last_col_var = -1, last_col_double = -1, last_col_dom = -1, last_col_zedoms[2] = {-1, -1} ;
-	std::string column_label () const ; ///< Description of the last do_col_J column (diagnostics).
-	std::string row_label (int row) const ; ///< Equation holding \c row of the residual (diagnostics).
     protected:
 
   std::vector<std::tuple<std::string, int, int>> eq_list; ///< List of all equations through all domains, to match indices to expressions.
@@ -235,8 +209,6 @@ class System_of_eqs {
 	* Returns the space.
 	*/
 	const Space& get_space() const {return espace ;} ;
-	int get_nterm() const {return nterm ;} ; ///< Number of \c Term_eq of the unknown fields.
-	int get_nterm_cst() const {return nterm_cst ;} ; ///< Number of \c Term_eq of the constants.
 	/**
 	* Returns the smallest index of the domains.
 	*/

@@ -183,39 +183,6 @@ void test_drop_negligible() {
     check(drop_negligible(t, row_max, col_max, 0.) == 0, "tolerance 0 keeps everything");
 }
 
-void test_merge_with_pattern() {
-    // pattern (col, row): (1,1) (1,3) (2,2) (3,1)
-    std::vector<int> const prow = {1, 3, 2, 1}, pcol = {1, 1, 2, 3};
-    SparseTriplets t;
-    t.rows = {1, 2};
-    t.cols = {1, 2};
-    t.values = {5., 7.};
-    check(sorted_by_column(t), "append order is sorted");
-    std::int64_t zeros = -1;
-    SparseTriplets m;
-    check(merge_with_pattern(t, prow, pcol, m, zeros) == 0 && zeros == 2,
-          "subset of the pattern: nothing outside, two zeros added");
-    check(m.rows == prow && m.cols == pcol, "union is the pattern");
-    check(m.values[0] == 5. && m.values[1] == 0. && m.values[2] == 7. &&
-              m.values[3] == 0.,
-          "values kept, missing positions zero");
-    check(t.size() == 2, "input unchanged");
-
-    SparseTriplets u;
-    u.rows = {2, 3, 2};
-    u.cols = {1, 1, 3};
-    u.values = {1., 2., 3.};
-    check(merge_with_pattern(u, prow, pcol, m, zeros) == 2 && zeros == 3,
-          "two new entries, three zeros");
-    check(m.size() == 6 && sorted_by_column(m), "union sorted, size 6");
-
-    SparseTriplets w;
-    w.rows = {2, 1};
-    w.cols = {1, 1};
-    w.values = {1., 1.};
-    check(!sorted_by_column(w), "unsorted rows detected");
-}
-
 }  // namespace
 
 int main() {
@@ -223,7 +190,6 @@ int main() {
     test_column_distribution();
     test_append_column();
     test_drop_negligible();
-    test_merge_with_pattern();
     std::cout << (failures == 0 ? "test_sparse_triplets: PASS"
                                 : "test_sparse_triplets: FAIL")
               << " (" << failures << " failures)" << std::endl;
