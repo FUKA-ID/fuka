@@ -204,6 +204,65 @@ void run_case(MumpsOptions options, std::string const& label) {
                     label + " [fresh, same matrix]");
 }
 
+/// Kept analysis (MumpsOptions::reuse_analysis): new values on the analysed pattern and a subset of it reuse the
+/// analysis (the subset with explicit zeros), an entry outside the pattern or reuse_analysis = false analyse again.
+void check_kept_analysis(MumpsOptions options, std::string const& label) {
+    options.verbosity = 1;
+    Matrix a = make_matrix(6, 40, 3, 21, false);
+    MumpsSolver solver(MPI_COMM_WORLD, options);
+    solve_and_check(solver, a, label + " [analysed]");
+    check(!solver.stats().analysis_reused, label + ": first solve analyses");
+
+    int k = 0;
+    for (auto& column : a)
+        for (auto& [i, v] : column)
+            v *= 1. + 0.01 * std::sin(1. * ++k);
+    solve_and_check(solver, a, label + " [new values]");
+    check(solver.stats().analysis_reused == options.reuse_analysis,
+          label + ": new values keep the analysis iff reuse_analysis");
+
+    Matrix subset = a;
+    int removed = 0;
+    for (std::size_t j = 0; j + 1 < subset.size() && removed < 20; j += 7)
+        for (auto it = subset[j].begin(); it != subset[j].end(); ++it)
+            if (std::fabs(it->second) < 0.5 &&
+                it->first != static_cast<int>(j)) {
+                subset[j].erase(it);
+                ++removed;
+                break;
+            }
+    solve_and_check(solver, subset, label + " [subset of the pattern]");
+    check(solver.stats().analysis_reused == options.reuse_analysis,
+          label + ": a subset keeps the analysis iff reuse_analysis");
+    if (options.reuse_analysis)
+        check(solver.stats().pattern_zeros == removed,
+              label + ": one explicit zero per removed entry");
+
+    Matrix grown = a;
+    grown[3][static_cast<int>(a.size()) - 1 - 50] = 0.25;
+    if (grown[3].size() == a[3].size())
+        grown[5][static_cast<int>(a.size()) - 1 - 60] = 0.25;
+    solve_and_check(solver, grown, label + " [entry outside the pattern]");
+    check(!solver.stats().analysis_reused,
+          label + ": a new entry gives a new analysis");
+    // other = subset plus a different new entry: the union analysis (not ParMETIS) then also covers grown.
+    Matrix other = subset;
+    other[8][static_cast<int>(a.size()) - 1 - 70] = 0.25;
+    solve_and_check(solver, other, label + " [other new entry]");
+    check(!solver.stats().analysis_reused,
+          label + ": the other new entry gives a new analysis");
+    solve_and_check(solver, grown, label + " [back to the grown matrix]");
+    check(solver.stats().analysis_reused ==
+              (options.reuse_analysis && !options.parallel_analysis),
+          label + ": the union pattern covers the earlier matrix");
+
+    solver.release_factors();
+    check(!solver.has_factors(), label + ": release_factors frees the factors");
+    solve_and_check(solver, grown, label + " [after release_factors]");
+    check(solver.stats().analysis_reused == options.reuse_analysis,
+          label + ": the analysis survives release_factors");
+}
+
 /// Different column distributions hand MUMPS the same entries in a different order; solutions for different
 /// distributions, and repeated solves, must agree to roundoff (bit identity is not required); the measured
 /// differences are printed.
@@ -336,6 +395,18 @@ int main(int argc, char** argv) {
         MumpsOptions parallel = distributed;
         parallel.parallel_analysis = true;
         run_case(parallel, "distributed/ParMETIS");
+    }
+    check_kept_analysis(centralized, "centralized kept analysis");
+    check_kept_analysis(distributed, "distributed kept analysis");
+    if (nproc_ > 1) {
+        MumpsOptions parallel = distributed;
+        parallel.parallel_analysis = true;
+        check_kept_analysis(parallel, "ParMETIS kept analysis");
+    }
+    {
+        MumpsOptions off = centralized;
+        off.reuse_analysis = false;
+        check_kept_analysis(off, "no kept analysis");
     }
     check_distribution_independence(centralized,
                                     "centralized distribution independence");

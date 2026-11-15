@@ -20,6 +20,7 @@ constexpr int kJobEnd = -2;
 constexpr int kJobAnalysis = 1;
 constexpr int kJobSolve = 3;
 constexpr int kJobFactorSolve = 5;
+constexpr int kJobFreeFactors = -4;
 
 /// MUMPS reports large counts as negative numbers of millions.
 std::int64_t millions_if_negative(int value) {
@@ -171,7 +172,30 @@ MumpsOptions MumpsOptions::from_env() {
         env_double("KADATH_MUMPS_RESIDUAL_TOL", options.residual_tolerance);
     options.pivot_threshold =
         env_double("KADATH_MUMPS_PIVOT_THRESHOLD", options.pivot_threshold);
+    options.reuse_analysis = env_int("KADATH_MUMPS_REUSE_ANALYSIS", 1) != 0;
+    // "i:value,i:value"
+    std::string const extra = env_string("KADATH_MUMPS_ICNTL", "");
+    std::size_t pos = 0;
+    while (pos < extra.size()) {
+        std::size_t const end = std::min(extra.find(',', pos), extra.size());
+        std::string const item = extra.substr(pos, end - pos);
+        std::size_t const colon = item.find(':');
+        if (colon != std::string::npos)
+            options.extra_icntl.emplace_back(
+                std::atoi(item.substr(0, colon).c_str()),
+                std::atoi(item.substr(colon + 1).c_str()));
+        pos = end + 1;
+    }
     return options;
+}
+
+bool MumpsOptions::same_analysis(MumpsOptions const& other) const {
+    return centralized == other.centralized && ordering == other.ordering &&
+           parallel_analysis == other.parallel_analysis &&
+           permutation == other.permutation && scaling == other.scaling &&
+           blr_tolerance == other.blr_tolerance &&
+           out_of_core == other.out_of_core &&
+           omp_threads == other.omp_threads && extra_icntl == other.extra_icntl;
 }
 
 MumpsSolver::MumpsSolver(MPI_Comm comm, MumpsOptions const& options)
@@ -205,6 +229,21 @@ void MumpsSolver::run(int job) {
     dmumps_c(&id_);
 }
 
+void MumpsSolver::release_factors() {
+    if (!analysed_ && !factored_)
+        return;
+    run(kJobFreeFactors);
+    factored_ = false;
+}
+
+bool MumpsSolver::adopt_options(MumpsOptions const& options) {
+    if (!options_.same_analysis(options))
+        return false;
+    options_ = options;
+    set_icntl(4, options_.verbosity);
+    return true;
+}
+
 int MumpsSolver::solve(int n,
                        SparseTriplets& local,
                        std::vector<double>& rhs_solution) {
@@ -220,6 +259,44 @@ int MumpsSolver::solve(int n,
     // b as given on rank 0, kept on every rank for the residual check of the solution.
     std::vector<double> b = rhs_solution;
     MPI_Bcast(b.data(), n, MPI_DOUBLE, 0, comm_);
+
+    // Kept analysis: bring the matrix to the analysed pattern (explicit zeros) and check that nothing is new.
+    // The local pattern decides on every rank; the gathered (centralized) pattern is then the same as well.
+    bool keep_analysis = false;
+    if (options_.reuse_analysis && analysed_ && analysed_n_ == n) {
+        double const start = MPI_Wtime();
+        long long counts[3] =
+            {0, 0, 0};  // entries outside, zeros added, unsorted ranks
+        SparseTriplets merged;
+        if (sorted_by_column(local)) {
+            std::int64_t zeros = 0;
+            counts[0] = merge_with_pattern(local,
+                                           pattern_rows_,
+                                           pattern_cols_,
+                                           merged,
+                                           zeros);
+            counts[1] = zeros;
+        } else
+            counts[2] = 1;
+        MPI_Allreduce(MPI_IN_PLACE, counts, 3, MPI_LONG_LONG, MPI_SUM, comm_);
+        keep_analysis = counts[0] == 0 && counts[2] == 0;
+        // Entries that were exact zeros at an earlier step appear later: analysing the union lets the pattern
+        // settle after a few steps. ParMETIS analyses the matrix as given (it failed with SIGFPE on a union in
+        // test_mumps_wrapper on 4 ranks).
+        if (keep_analysis || (counts[2] == 0 && !options_.parallel_analysis))
+            local = std::move(merged);
+        else
+            counts[1] = 0;
+        stats_.pattern_zeros = counts[1];
+        stats_.time_pattern = MPI_Wtime() - start;
+        if (rank_ == 0 && !keep_analysis && options_.verbosity > 0)
+            std::cout << "MUMPS: new analysis, "
+                      << (counts[2] ? std::string("unsorted entries")
+                                    : std::to_string(counts[0]) +
+                                          " entries outside the analysed "
+                                          "pattern")
+                      << std::endl;
+    }
 
     std::int64_t const local_nnz = local.size();
     std::vector<std::int64_t> counts(nproc, 0);
@@ -275,8 +352,6 @@ int MumpsSolver::solve(int n,
     set_icntl(21, 0);  // centralized solution, overwrites rhs on the host
     id_.nrhs = 1;
     id_.lrhs = n;
-    if (rank_ == 0)
-        id_.rhs = rhs_solution.data();
 
     if (options_.omp_threads > 0)
         set_icntl(16, options_.omp_threads);
@@ -286,13 +361,57 @@ int MumpsSolver::solve(int n,
     }
     set_icntl(22, options_.out_of_core ? 1 : 0);
     id_.cntl[1 - 1] = options_.pivot_threshold;
+    for (auto const& [i, value] : options_.extra_icntl)
+        if (i >= 1 && i <= 60)
+            set_icntl(i, value);
 
-    double start = MPI_Wtime();
-    run(kJobAnalysis);
-    stats_.time_analysis = MPI_Wtime() - start;
-    if (infog(1) < 0)
-        return infog(1);
-    stats_.estimated_factor_entries = millions_if_negative(infog(20));
+    int status = analyse_factor_solve(keep_analysis, n, local, b, rhs_solution);
+    if (keep_analysis && status != 0) {
+        // The kept ordering may not suit the new values (more delayed pivots, a worse solution): analyse again.
+        if (rank_ == 0)
+            std::cout << "MUMPS: factorization with the kept analysis failed ("
+                      << mumps_error_message(status)
+                      << "), repeating it with a new analysis" << std::endl;
+        rhs_solution = b;
+        status = analyse_factor_solve(false, n, local, b, rhs_solution);
+    }
+
+    // The matrix arrays are the caller's or local to this call; JOB=3 only needs the factors.
+    id_.irn = id_.jcn = id_.irn_loc = id_.jcn_loc = nullptr;
+    id_.a = id_.a_loc = id_.rhs = nullptr;
+    if (status != 0)
+        return status;
+    factored_ = true;
+    n_ = n;
+    return 0;
+}
+
+int MumpsSolver::analyse_factor_solve(bool keep_analysis,
+                                      int n,
+                                      SparseTriplets const& local,
+                                      std::vector<double> const& b,
+                                      std::vector<double>& rhs_solution) {
+    if (rank_ == 0)
+        id_.rhs = rhs_solution.data();
+
+    stats_.analysis_reused = keep_analysis;
+    if (!keep_analysis) {
+        analysed_ = false;
+        double const start = MPI_Wtime();
+        run(kJobAnalysis);
+        stats_.time_analysis += MPI_Wtime() - start;
+        if (infog(1) < 0)
+            return infog(1);
+        analysis_estimate_mb_ = std::max(1, infog(16));
+        analysis_factor_entries_ = millions_if_negative(infog(20));
+        if (options_.reuse_analysis) {
+            analysed_ = true;
+            analysed_n_ = n;
+            pattern_rows_ = local.rows;
+            pattern_cols_ = local.cols;
+        }
+    }
+    stats_.estimated_factor_entries = analysis_factor_entries_;
 
     // ICNTL(23): the same explicit working-memory budget on every rank. A rank whose analysis estimate is tiny
     // can receive delayed pivots during factorization; a percentage relaxation (ICNTL(14)) of a tiny estimate
@@ -301,7 +420,7 @@ int MumpsSolver::solve(int n,
     long const cap_mb = share_mb > 0 ? static_cast<long>(0.8 * share_mb)
                                      : LONG_MAX;
     long const estimate_mb =
-        std::max(1, infog(16));  // largest per-rank in-core estimate
+        analysis_estimate_mb_;  // largest per-rank in-core estimate
     long budget_mb = options_.max_mem_mb > 0
                          ? options_.max_mem_mb
                          : estimate_mb + estimate_mb / 4 +
@@ -311,7 +430,7 @@ int MumpsSolver::solve(int n,
         budget_mb = std::max(estimate_mb, std::min(budget_mb, cap_mb));
 
     int mem_relax = options_.mem_relax_percent;
-    start = MPI_Wtime();
+    double start = MPI_Wtime();
     for (int attempt = 0;; ++attempt) {
         set_icntl(14, mem_relax);
         set_icntl(23, static_cast<int>(std::min<long>(budget_mb, INT_MAX)));
@@ -333,7 +452,7 @@ int MumpsSolver::solve(int n,
         budget_mb = next_mb;
         mem_relax *= 2;
     }
-    stats_.time_factor_solve = MPI_Wtime() - start;
+    stats_.time_factor_solve += MPI_Wtime() - start;
     stats_.mem_relax_used = mem_relax;
     stats_.mem_budget_mb = budget_mb;
     stats_.off_diagonal_pivots = infog(12);
@@ -350,6 +469,7 @@ int MumpsSolver::solve(int n,
     MPI_Bcast(rhs_solution.data(), n, MPI_DOUBLE, 0, comm_);
 
     // Residual check with the entries as given (MUMPS does not modify them): every rank multiplies its own.
+    std::int64_t const local_nnz = local.size();
     std::vector<double> local_ax(n, 0.), ax(n, 0.);
     for (std::int64_t k = 0; k < local_nnz; ++k)
         local_ax[local.rows[k] - 1] += local.values[k] *
@@ -361,14 +481,8 @@ int MumpsSolver::solve(int n,
         scale = std::max(scale, std::fabs(b[i]));
     }
     stats_.relative_residual = scale > 0. ? diff / scale : diff;
-
-    // The matrix arrays are the caller's or local to this call; JOB=3 only needs the factors.
-    id_.irn = id_.jcn = id_.irn_loc = id_.jcn_loc = nullptr;
-    id_.a = id_.a_loc = id_.rhs = nullptr;
     if (!(stats_.relative_residual <= options_.residual_tolerance))
         return kInaccurateSolution;
-    factored_ = true;
-    n_ = n;
     return 0;
 }
 

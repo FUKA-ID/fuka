@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -90,6 +91,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     std::string const prefix = argv[1];
+    bool ok_repeat = true;
 
     int n = 0, nproc_dump = 0;
     SparseTriplets local;
@@ -124,6 +126,48 @@ int main(int argc, char** argv) {
     int const status = solver.solve(n, local, x);
     double const elapsed = MPI_Wtime() - start;
     MumpsStats const& s = solver.stats();
+    if (rank == 0)
+        std::cout << "replay times: gather " << s.time_gather << ", analysis "
+                  << s.time_analysis << ", factor+solve "
+                  << s.time_factor_solve << " s" << std::endl;
+
+    // KADATH_REPLAY_REPEAT=k: k more solves on the same instance with perturbed values (a Newton-like
+    // sequence), to time and check the kept analysis (KADATH_MUMPS_REUSE_ANALYSIS).
+    char const* repeat_env = std::getenv("KADATH_REPLAY_REPEAT");
+    int const repeat = repeat_env ? std::atoi(repeat_env) : 0;
+    for (int r = 1; r <= repeat && status == 0; ++r) {
+        SparseTriplets perturbed = original;
+        for (std::int64_t k = 0; k < perturbed.size(); ++k)
+            perturbed.values[k] *= 1. + 1e-3 * std::sin(1. * r * (k + 1));
+        if (r % 2 == 0 && perturbed.size() > 0) {  // drop one local entry: the kept pattern gets a zero
+            perturbed.rows.pop_back();
+            perturbed.cols.pop_back();
+            perturbed.values.pop_back();
+        }
+        SparseTriplets const check_matrix = perturbed;
+        std::vector<double> const br = multiply(check_matrix, x_true);
+        std::vector<double> xr = br;
+        double const t0 = MPI_Wtime();
+        int const st = solver.solve(n, perturbed, xr);
+        double const dt = MPI_Wtime() - t0;
+        std::vector<double> res = multiply(check_matrix, xr);
+        for (int i = 0; i < n; ++i)
+            res[i] -= br[i];
+        double const rel = max_abs(res) / max_abs(br);
+        if (rank == 0)
+            std::cout << "replay repeat " << r << ": status " << st
+                      << ", analysis "
+                      << (solver.stats().analysis_reused
+                              ? std::string("kept")
+                              : std::to_string(solver.stats().time_analysis))
+                      << ", zeros " << solver.stats().pattern_zeros
+                      << ", factor+solve " << solver.stats().time_factor_solve
+                      << " s, total " << dt << " s, relative residual " << rel
+                      << (st == 0 && rel < 1e-12 ? "  [ok]" : "  [BAD]")
+                      << std::endl;
+        if (st != 0 || !(rel < 1e-12))
+            ok_repeat = false;
+    }
 
     int ok = 0;
     if (rank == 0)
@@ -156,7 +200,7 @@ int main(int argc, char** argv) {
                       << (ok ? "  [ok]" : "  [INACCURATE]") << std::endl;
     }
     MPI_Finalize();
-    return ok ? 0 : 1;
+    return ok && ok_repeat ? 0 : 1;
 }
 
 #else

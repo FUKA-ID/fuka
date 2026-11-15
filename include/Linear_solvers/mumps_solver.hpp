@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Linear_solvers/sparse_triplets.hpp"
@@ -45,8 +46,10 @@ struct MumpsOptions {
     /// INFOG(16) + 64 MB on every rank (a rank with a tiny own estimate that receives delayed pivots then still
     /// has room), at most 80 % of the free node memory per rank; doubled on workspace errors.
     int max_mem_mb = 0;
-    /// ICNTL(6): column permutation towards a zero-free diagonal (centralized input only); 7 = automatic.
-    int permutation = 7;
+    /// ICNTL(6): column permutation towards a zero-free diagonal (centralized input only). 3 (maximize the
+    /// smallest diagonal entry) instead of 7 (automatic): on Kadath Jacobians the analysis is 3-4x faster
+    /// (BH: 4.5 -> 1.2 s at n = 10k) with the same factorization time and residual (BH, BBH, BNS CI runs).
+    int permutation = 3;
     /// ICNTL(8): scaling strategy; -1 (default) = 0 (none) for centralized input, 77 (automatic) for
     /// distributed input. Centralized + 77 uses the scaling of the ICNTL(6) matching, which produced solutions
     /// with residual 1e-2 (reported as success) on BH Jacobians; without scaling they solve to <= 1e-14 at the
@@ -55,10 +58,21 @@ struct MumpsOptions {
     /// Largest accepted max|A x - b| / max|b|; a worse solution is rejected with kInaccurateSolution, so a
     /// factorization that reports success but is wrong is never used.
     double residual_tolerance = 1e-10;
+    /// Keep the analysis (JOB=1) of the previous solve() on this instance and only factorize (JOB=5) when the new
+    /// matrix has no entry outside the analysed pattern; entries of that pattern missing from the new matrix are
+    /// passed as explicit zeros. Otherwise the union of both patterns is analysed (the matrix as given with
+    /// ParMETIS), so the pattern settles once entries that were exact zeros have appeared. A factorization that
+    /// fails or fails the residual check with a kept analysis is repeated once with a new analysis.
+    bool reuse_analysis = true;
+    /// Further ICNTL(i) = value settings applied last (KADATH_MUMPS_ICNTL="i:value,i:value"), for experiments.
+    std::vector<std::pair<int, int>> extra_icntl;
 
     /// Options from KADATH_MUMPS_{INPUT,ORDERING,MEM_RELAX,VERBOSITY,OMP_THREADS,BLR,OOC,PIVOT_THRESHOLD,MAX_MEM_MB,
-    /// PERMUTATION,SCALING,RESIDUAL_TOL}.
+    /// PERMUTATION,SCALING,RESIDUAL_TOL,REUSE_ANALYSIS,ICNTL}.
     static MumpsOptions from_env();
+
+    /// True when @p other gives the same analysis (input mode, ordering, permutation, scaling, extra ICNTL).
+    bool same_analysis(MumpsOptions const& other) const;
 };
 
 /// Statistics of the last MumpsSolver::solve call.
@@ -84,7 +98,14 @@ struct MumpsStats {
         0;  ///< ICNTL(23) of the last factorization attempt (MB per rank).
     double time_gather =
         0.;  ///< Seconds spent gathering triplets on rank 0 (centralized input).
-    double time_analysis = 0.;  ///< Seconds in JOB=1.
+    double time_analysis =
+        0.;  ///< Seconds in JOB=1 (0 when the analysis was kept).
+    bool analysis_reused =
+        false;  ///< The factorization used the analysis of an earlier solve().
+    std::int64_t pattern_zeros =
+        0;  ///< Explicit zeros added to keep the analysed pattern (all ranks).
+    double time_pattern =
+        0.;  ///< Seconds spent matching the matrix to the analysed pattern.
     double time_factor_solve =
         0.;  ///< Seconds in the successful JOB=5 (and failed attempts).
 };
@@ -121,10 +142,24 @@ class MumpsSolver {
     /// True when the last solve() succeeded, so solve_factored() can be used.
     bool has_factors() const { return factored_; }
 
+    /// Frees the factors (JOB=-4) but keeps the analysis for the next solve(); collective.
+    void release_factors();
+
+    /// Takes over @p options if they give the same analysis as the current ones (so a kept analysis stays
+    /// valid) and returns true; otherwise leaves the instance unchanged and returns false.
+    bool adopt_options(MumpsOptions const& options);
+
     MumpsStats const& stats() const { return stats_; }
 
    private:
     void run(int job);
+    /// JOB=1 (unless @p keep_analysis) and JOB=5 with the memory-budget retries, then the residual check of the
+    /// solution against @p b; the matrix and right-hand side pointers must be set.
+    int analyse_factor_solve(bool keep_analysis,
+                             int n,
+                             SparseTriplets const& local,
+                             std::vector<double> const& b,
+                             std::vector<double>& rhs_solution);
 
     void set_icntl(int i, int value) { id_.icntl[i - 1] = value; }
 
@@ -137,6 +172,13 @@ class MumpsSolver {
     DMUMPS_STRUC_C id_;
     bool factored_ = false;
     int n_ = 0;
+    /// Local pattern (1-based rows/cols, sorted by column then row) of the kept analysis; empty without one.
+    bool analysed_ = false;
+    int analysed_n_ = 0;
+    std::vector<int> pattern_rows_, pattern_cols_;
+    long analysis_estimate_mb_ = 1;  ///< INFOG(16) of the kept analysis.
+    std::int64_t analysis_factor_entries_ =
+        0;  ///< INFOG(20) of the kept analysis.
 };
 
 /// Human-readable message for a MUMPS INFOG(1) error code.

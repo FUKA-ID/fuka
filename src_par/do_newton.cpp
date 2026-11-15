@@ -511,6 +511,12 @@ void report_phase_times(System_of_eqs const& syst, char const* what, System_of_e
 	std::cout << std::endl;
 }
 
+/// std::to_string would print fallback with 6 decimals (1e-10 -> "0.000000"): parse the variable only when set.
+double env_double_on_root(char const* name, double fallback) {
+	std::string const value = env_on_root(name, "");
+	return value.empty() ? fallback : std::stod(value);
+}
+
 /// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
 /// successful solver (with its factors) is returned in @p solver. Collective. @return 0 or the last status.
 /// @param drop_tolerance > 0 removes entries negligible relative to both their row and column maximum before
@@ -541,17 +547,24 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		report_phase_times(syst, "sec_member", syst.times_sec);
 	}
 	dump_jacobian_pattern(n, local);
-	if (drop_tolerance > 0.) {
+	// Round-off entries: about half of a Kadath Jacobian is below 1e-16 of both its row and its column maximum
+	// (sums of spectral terms that cancel), two thirds below 1e-14. They only cost fill (BH: 47M -> 10M entries
+	// at 1e-14, analysis + factorization 122 -> 19 s) and change the pattern from step to step. Dropping at
+	// 1e-16 ... 1e-13 left the BH Newton history and the solution unchanged (parameters <= 1e-13 relative).
+	// KADATH_JACOBIAN_NOISE_DROP sets the tolerance (default 1e-14, 0 keeps every entry).
+	double const noise = env_double_on_root("KADATH_JACOBIAN_NOISE_DROP", 1e-14);
+	if ((drop_tolerance > 0.) || (noise > 0.)) {
+		double const tolerance = std::max(drop_tolerance, noise);
 		std::vector<double> row_max, col_max;
 		local_row_column_max(local, n, row_max, col_max);
 		MPI_Allreduce(MPI_IN_PLACE, row_max.data(), n, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 		long long counts[2] = {static_cast<long long>(local.size()), 0};
-		counts[1] = drop_negligible(local, row_max, col_max, drop_tolerance);
+		counts[1] = drop_negligible(local, row_max, col_max, tolerance);
 		MPI_Allreduce(MPI_IN_PLACE, counts, 2, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 		if (rank == 0)
-			std::cout << "Preconditioner: dropped " << counts[1] << " of " << counts[0] << " entries ("
-			          << 100. * counts[1] / std::max(1LL, counts[0]) << " %) at relative tolerance " << drop_tolerance
-			          << std::endl;
+			std::cout << (drop_tolerance > 0. ? "Preconditioner" : "Jacobian") << ": dropped " << counts[1] << " of "
+			          << counts[0] << " entries (" << 100. * counts[1] / std::max(1LL, counts[0])
+			          << " %) at relative tolerance " << tolerance << std::endl;
 	}
 
 	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
@@ -559,10 +572,14 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	int status = 0;
 	for (std::size_t attempt = 0; attempt < ladder.size(); ++attempt) {
 		x.assign(second.get_data(), second.get_data() + n);
-		solver.reset();
 		MumpsOptions options = ladder[attempt].options;
 		options.residual_tolerance = std::max(options.residual_tolerance, residual_tolerance);
-		solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, options);
+		// The first attempt keeps the instance of the previous step (and with it the MUMPS analysis, see
+		// MumpsOptions::reuse_analysis) when its options allow; the retries always start afresh.
+		if (attempt > 0 || !solver || !solver->adopt_options(options)) {
+			solver.reset();
+			solver = std::make_unique<MumpsSolver>(MPI_COMM_WORLD, options);
+		}
 		status = solver->solve(n, local, x);
 		if (rank == 0 && status != 0) {
 			MumpsStats const& f = solver->stats();
@@ -594,12 +611,46 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		          << ", off-diagonal = " << s.off_diagonal_pivots
 		          << ", factor entries estimated/actual = " << s.estimated_factor_entries << " / " << s.factor_entries
 		          << std::endl;
-		std::cout << "Inverting the matrix: " << s.time_gather + s.time_analysis + s.time_factor_solve
-		          << " seconds (gather " << s.time_gather << ", analysis " << s.time_analysis
-		          << ", factor+solve " << s.time_factor_solve << ")" << std::endl;
+		std::cout << "Inverting the matrix: " << s.time_pattern + s.time_gather + s.time_analysis + s.time_factor_solve
+		          << " seconds (pattern " << s.time_pattern << ", gather " << s.time_gather << ", analysis "
+		          << (s.analysis_reused ? std::string("kept") : std::to_string(s.time_analysis)) << ", factor+solve "
+		          << s.time_factor_solve << ")";
+		if (s.pattern_zeros > 0)
+			std::cout << ", " << s.pattern_zeros << " explicit zeros keep the analysed pattern";
+		std::cout << std::endl;
 	}
 
 	return status;
+}
+
+}  // namespace
+
+namespace {
+
+/// MUMPS instance of the exact sparse Newton steps, kept between the steps of one system for its analysis.
+struct ExactSolverState {
+	unsigned long syst_id = 0;
+	std::unique_ptr<MumpsSolver> solver;
+};
+
+ExactSolverState& exact_solver_state();
+
+/// Released in MPI_Finalize while MPI still works (see release_krylov_state).
+int release_exact_solver_state(MPI_Comm, int, void*, void*) {
+	exact_solver_state() = ExactSolverState{};
+	return MPI_SUCCESS;
+}
+
+ExactSolverState& exact_solver_state() {
+	static ExactSolverState state;
+	static bool registered = false;
+	if (!registered) {
+		registered = true;
+		int keyval;
+		MPI_Comm_create_keyval(MPI_COMM_NULL_COPY_FN, release_exact_solver_state, &keyval, nullptr);
+		MPI_Comm_set_attr(MPI_COMM_SELF, keyval, nullptr);
+	}
+	return state;
 }
 
 }  // namespace
@@ -609,8 +660,16 @@ Array<double> newton_update_mumps(System_of_eqs& syst, Array<double> const& seco
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	int const n = syst.get_nbr_unknowns();
 	std::vector<double> x;
-	std::unique_ptr<MumpsSolver> solver;
-	int const status = sparse_newton_step(syst, second, x, solver);
+	ExactSolverState& st = exact_solver_state();
+	if (st.syst_id != syst.get_instance_id()) {
+		st = ExactSolverState{};
+		st.syst_id = syst.get_instance_id();
+	}
+	int const status = sparse_newton_step(syst, second, x, st.solver);
+	if (status != 0)
+		st = ExactSolverState{};
+	else
+		st.solver->release_factors();  // only the analysis is needed for the next step
 
 	if (status != 0) {
 		if (rank == 0 && (status == -6 || status == -10))
@@ -665,12 +724,6 @@ KrylovState& krylov_state() {
 		MPI_Comm_set_attr(MPI_COMM_SELF, keyval, nullptr);
 	}
 	return state;
-}
-
-/// std::to_string would print fallback with 6 decimals (1e-10 -> "0.000000"): parse the variable only when set.
-double env_double_on_root(char const* name, double fallback) {
-	std::string const value = env_on_root(name, "");
-	return value.empty() ? fallback : std::stod(value);
 }
 
 }  // namespace
@@ -805,7 +858,10 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	if (rank == 0)
 		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ", ||F|| = " << norm
 		          << ", previous " << st.previous_norm << ")" << std::endl;
-	st.preconditioner.reset();
+	// The kept MUMPS instance carries its analysis to the refactorization; another system or resolution gets a
+	// fresh one, so the analysed pattern never mixes the patterns of different systems.
+	if (st.n != n || st.syst_id != syst.get_instance_id())
+		st.preconditioner.reset();
 	int status = sparse_newton_step(syst, second, x, st.preconditioner, drop, (drop > 0.) ? preconditioner_residual : 0.);
 	if (status == 0 && drop > 0.) {
 		// The factors belong to the dropped matrix: solve with the true J v, preconditioned by them.
@@ -824,7 +880,6 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 				std::cout << "Newton-Krylov: GMRES with the dropped preconditioner did not reach " << exact_tolerance
 				          << " (relative residual " << result.relative_residual << ", preconditioner status "
 				          << preconditioner_status << "); refactoring without dropping" << std::endl;
-			st.preconditioner.reset();
 			status = sparse_newton_step(syst, second, x, st.preconditioner);
 		}
 	}
