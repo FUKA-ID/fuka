@@ -55,7 +55,7 @@ The solvers are structured as follows:
         - `reader.cpp`: the reader can provide diagnostics from ID solutions that are computed from the ID
 2. The related `solve.cpp` in most cases is simply a frontend with minimal functionality.  
 Most of the business is stored in `$HOME_KADATH/include/Solvers`
-3. The `reader.cpp` code is currently shared between v1 and v2 solvers, therefore symbolic links are used
+3. Each solver has its own `reader.cpp`
 
 # 4. Getting Started
 
@@ -65,7 +65,57 @@ the FUKA library, initial data codes, and related PythonTools.
 Once the intended features have been successfully compiled, the \ref tutorials are
 a great place to get acquainted with FUKA!
 
-# 5. Acknowledgements
+# 5. Newton solvers, memory and number of nodes
+
+Every solver stage is a Newton-Raphson iteration. Built with MUMPS (see \ref install), FUKA solves each
+Newton step with a sparse Jacobian; nothing needs to be configured. `KADATH_LINSOLVE` selects the solver:
+
+| `KADATH_LINSOLVE` | Solver | Use |
+|---|---|---|
+| `krylov` (default with MUMPS) | GMRES on the matrix-free Jacobian product, preconditioned by MUMPS factors of an earlier Jacobian | all runs |
+| `mumps` | exact sparse Newton step every iteration | when Newton-Krylov struggles (it re-assembles the Jacobian every step, about twice as slow) |
+| `scalapack` (default without MUMPS) | dense LU, the solver of FUKA <= v2.4 | small systems; memory grows as the square of the number of unknowns |
+
+## Memory
+
+The memory of a run is the sum of two parts:
+
+1. Every MPI rank holds the whole numerical space and system of equations. This part grows with the
+   resolution and the number of domains and is the same for all three solvers. Measured: about 0.2 GB per
+   rank for an isolated BH or NS at resolution 9, 0.35 GB at resolution 13, and 0.5 GB per rank for the
+   default binaries.
+2. The linear solver. Dense ScaLAPACK needs about 40 n^2 bytes in total (n unknowns: 46 GB for n = 34,815),
+   independent of the number of ranks. Newton-Krylov and MUMPS store the sparse factors (0.1-0.7 GB for the
+   cases below) and rank 0 additionally holds the gathered Jacobian for the MUMPS analysis (2-13 GB, growing
+   with n), so the first node needs more memory than the others.
+
+The solvers print the peak memory per rank, per node and in total after every Newton step
+(`Memory high-water mark (VmHWM)`), which is the quantity to size a run with.
+
+Measured peak memory and wall time (192 GB, 40-core nodes; `outer_shells` adds domains around the binary):
+
+| Case | n (largest stage) | ranks | Krylov: total / first node | MUMPS: total | ScaLAPACK: total |
+|---|---|---|---|---|---|
+| BH, res 9 | 10,471 | 40 | 7.0 GB | 7.1 GB | 10.8 GB |
+| BH, res 11 | 20,249 | 40 | 9.1 GB | 9.8 GB | 23.9 GB |
+| BH, res 13 | 34,815 | 40 | 14.0 GB | 14.5 GB | 59.9 GB |
+| BBH, res 9 | 33,878 | 80 | 38 GB / 19 GB | 50 GB | 85 GB (res 7) |
+| BBH, res 9, 2 outer shells | 39,332 | 80 | 44 GB / 24 GB | 54 GB | |
+| BBH, res 9, 4 outer shells | 44,786 | 80 | 48 GB / 27 GB | 61 GB | |
+| BBH, res 11 | 64,634 | 80 | 72 GB / 41 GB | 83 GB | (about 240 GB) |
+| BHNS, res 11 (README second run) | 98,687 | 80 | 116 GB / 59 GB | | (about 500 GB) |
+| BNS, res 11 (README second run) | 91,412 | 80 | 114 GB / 60 GB | | (about 450 GB) |
+
+Values in parentheses are estimated from the 40 n^2 bytes of the dense solver plus the replicated part.
+
+## Choosing the number of nodes
+
+- With MUMPS the binary cases at resolution 9 to 11 run on 2 nodes (80 ranks); more ranks shorten the
+  Jacobian assembly but add 0.2-0.5 GB per rank of replicated memory.
+- Keep the first node's memory (`max ... GB per node` in the log) below the node memory; it is the largest.
+- Use `OMP_NUM_THREADS=1` (one MPI rank per core).
+
+# 6. Acknowledgements
 
 I have been developing FUKAv2 since before the initial public release in an 
 effort to automate ID construction across the space of parameters.
@@ -75,7 +125,7 @@ L. Jens Papenfort and Elias R. Most for their helpful discussions.
 Furthermore, I would like to thank Konrad Topolski for being an early adopter of the v2 codes and for his continued feedback and support throughout the many changes since
 then.
 
-# 6. Outstanding Tasks
+# 7. Outstanding Tasks
 
 The following are on the list of things to do based on expected level of effort:
 
@@ -83,7 +133,7 @@ The following are on the list of things to do based on expected level of effort:
 2. Add documentation for `PythonTools` to make them more accessible
 3. Implement solvers for BH, BBH, and BHNS that allow for maximal spinning black holes
 
-# 7. Contributing
+# 8. Contributing
 
 1. Feedback and bugs are always a welcomed contribution.  One can always e-mail the maintainers for issues experienced or configurations that provide challenges as this can help to diagnose limitations in the solvers
 2. Help with the current outstanding tasks is of course possible whether through code or experience with certain issues, e.g. optimizing a fix grid setup to avoid spectral artifacts.  For code contributions, forking and submitting pull requests is possible.

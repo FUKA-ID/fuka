@@ -560,7 +560,9 @@ struct KrylovState {
 	double previous_eta = -1.;     ///< Forcing term of the previous GMRES step (< 0: none).
 	/// Row scaling of the GMRES system: 1 / (largest |entry| of the row) of the factored Jacobian. Kadath rows
 	/// differ by orders of magnitude (integral conditions grow as M^2, field equations as 1/M^2), and without
-	/// it GMRES and the forcing term would only see the largest rows.
+	/// it GMRES and the forcing term would only see the largest rows. One factor per equation instead (the
+	/// largest entry of all its rows) diverged on the BH CI case: an equation's largest entries come from a few
+	/// rows, and the others were again ignored.
 	std::vector<double> row_scale;
 	NewtonKrylovStats stats;
 };
