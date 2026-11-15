@@ -49,6 +49,8 @@ echo "Solver: $solver_path"
 echo "Input File: $input_file"
 
 source $HOME_KADATH/.hpc_ci_runs/env_template.sh
+# one thread per MPI rank: MUMPS and MKL are OpenMP-threaded (FUKA README, section 5)
+export OMP_NUM_THREADS=1
 
 mpirun ${solver_path}/bin/Release/solve $input_file .
 EOF
