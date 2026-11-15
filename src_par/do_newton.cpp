@@ -434,8 +434,10 @@ constexpr double kPreconditionerResidual = 1e-6;
 /// @param drop_tolerance > kJacobianNoise removes more entries (drop_negligible): the factors and x then belong to
 /// a perturbed matrix, so only preconditioners may use it, and the MUMPS residual check is relaxed to
 /// kPreconditionerResidual.
+/// @param row_max if given, receives the largest |entry| of every row of the assembled Jacobian (all ranks).
 int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::vector<double>& x,
-                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.) {
+                       std::unique_ptr<MumpsSolver>& solver, double drop_tolerance = 0.,
+                       std::vector<double>* row_max_out = nullptr) {
 	int rank, nproc;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
@@ -456,6 +458,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		std::vector<double> row_max, col_max;
 		local_row_column_max(local, n, row_max, col_max);
 		MPI_Allreduce(MPI_IN_PLACE, row_max.data(), n, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+		if (row_max_out != nullptr)
+			*row_max_out = row_max;
 		long long counts[2] = {static_cast<long long>(local.size()), 0};
 		counts[1] = drop_negligible(local, row_max, col_max, tolerance);
 		MPI_Allreduce(MPI_IN_PLACE, counts, 2, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
@@ -554,6 +558,10 @@ struct KrylovState {
 	std::unique_ptr<MumpsSolver> preconditioner;
 	double previous_norm = -1.;    ///< ||second||_2 of the previous step.
 	double previous_eta = -1.;     ///< Forcing term of the previous GMRES step (< 0: none).
+	/// Row scaling of the GMRES system: 1 / (largest |entry| of the row) of the factored Jacobian. Kadath rows
+	/// differ by orders of magnitude (integral conditions grow as M^2, field equations as 1/M^2), and without
+	/// it GMRES and the forcing term would only see the largest rows.
+	std::vector<double> row_scale;
 	NewtonKrylovStats stats;
 };
 
@@ -602,28 +610,47 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	int const n = syst.get_nbr_unknowns();
 	KrylovState& st = krylov_state();
 
+	// GMRES solves the row-scaled system (D J) dx = D second, D = st.row_scale, right-preconditioned by the
+	// kept factors: M^{-1} = J_old^{-1} D^{-1}. dx is unchanged by the scaling; residuals and the forcing term are
+	// measured in the scaled norm, which weighs every equation alike.
+	std::vector<double> b;
 	double norm = 0.;
-	for (int i = 0; i < n; ++i)
-		norm += second(i) * second(i);
-	norm = std::sqrt(norm);
-	MPI_Bcast(&norm, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	auto scale_rhs = [&]() {
+		bool const scaled = static_cast<int>(st.row_scale.size()) == n;
+		b.assign(second.get_data(), second.get_data() + n);
+		norm = 0.;
+		for (int i = 0; i < n; ++i) {
+			if (scaled)
+				b[i] *= st.row_scale[i];
+			norm += b[i] * b[i];
+		}
+		MPI_Bcast(b.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		norm = std::sqrt(norm);
+		MPI_Bcast(&norm, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	};
+	scale_rhs();
 
-	auto apply_j = [&syst, n](std::vector<double> const& v, std::vector<double>& w) {
+	auto apply_j = [&syst, &st, n](std::vector<double> const& v, std::vector<double>& w) {
 		Array<double> av (n);
 		for (int i = 0; i < n; ++i)
 			av.set(i) = v[i];
 		Array<double> const jv (syst.do_JX(av));
 		w.assign(jv.get_data(), jv.get_data() + n);
 		MPI_Bcast(w.data(), n, MPI_DOUBLE, 0, MPI_COMM_WORLD);  // every rank continues with identical data
+		if (static_cast<int>(st.row_scale.size()) == n)
+			for (int i = 0; i < n; ++i)
+				w[i] *= st.row_scale[i];
 	};
 	int preconditioner_status = 0;
-	auto apply_m = [&st, &preconditioner_status](std::vector<double> const& v, std::vector<double>& z) {
+	auto apply_m = [&st, &preconditioner_status, n](std::vector<double> const& v, std::vector<double>& z) {
 		z = v;
+		if (static_cast<int>(st.row_scale.size()) == n)
+			for (int i = 0; i < n; ++i)
+				z[i] /= st.row_scale[i];
 		int const s = st.preconditioner->solve_factored(z);
 		if (s != 0)
 			preconditioner_status = s;
 	};
-	std::vector<double> const b (second.get_data(), second.get_data() + n);
 
 	std::string reason;  // why this step refactors (empty: GMRES with the kept preconditioner)
 	if (!st.preconditioner || !st.preconditioner->has_factors())
@@ -672,8 +699,15 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 
 	if (rank == 0)
 		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ")" << std::endl;
-	int status = sparse_newton_step(syst, second, x, st.preconditioner, kPreconditionerDrop);
+	std::vector<double> row_max;
+	int status = sparse_newton_step(syst, second, x, st.preconditioner, kPreconditionerDrop, &row_max);
 	if (status == 0) {
+		// New row scaling from this Jacobian (rows without entries keep 1).
+		st.row_scale.assign(n, 1.);
+		for (int i = 0; i < n; ++i)
+			if (row_max[i] > 0.)
+				st.row_scale[i] = 1. / row_max[i];
+		scale_rhs();
 		// The factors belong to the dropped matrix: solve with the true J v, preconditioned by them.
 		preconditioner_status = 0;
 		auto begin = std::chrono::system_clock::now();
