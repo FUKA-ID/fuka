@@ -271,7 +271,4 @@ Notes:
 
 1. The Newton steps use the sparse solvers described in the [FUKA README](../README.md) (section 5); run with
 `OMP_NUM_THREADS=1`.
-2. Known issue: with the sparse solvers, runs with `use_iso_solver on` on more than 40 MPI ranks (80 tested) can
-abort right after the quasi-isotropic stage.  40 ranks (on one or two nodes) and ScaLAPACK are not affected; use
-at most 40 ranks until this is resolved.
 </b>

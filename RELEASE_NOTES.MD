@@ -18,6 +18,15 @@
   derivative only), and `do_JX` uses the same shortcuts.
 * The peak memory (VmHWM per rank, per node and in total) is printed after every Newton step.
 * Tests of the sparse solvers: `codes/tests/newton_sparse` (see its README).
+### Bug Fixes
+* Solutions, checkpoints and config files are written atomically (temporary file, `fsync`, rename) by
+  `bco_utils::save_to_file` and `write_config`. Rank 0 rewrites e.g. `ns_regrid.dat` under the same name
+  at every step and all ranks read it after a barrier; on a network file system ranks on other nodes could
+  read the old or a partly written file and abort with `std::bad_alloc` (seen in `NS_DIFFROT` on 80 ranks).
+* `Lorene_Table` stops with an error naming the file when no EOS entries are read, instead of corrupting
+  the table sizes.
+* BNS and BHNS always construct their neutron stars with the 3D XCTS solver: `use_iso_solver` from the
+  binary config is no longer passed to the companion stars.
 ### Changes
 * `NS_isotropic` reader: the GRV2 virial identity is no longer printed. Its integrand mixed the p/rho
   rescaled matter sources with unrescaled field terms, and the 1/(r sin(theta)) weight was applied by a
