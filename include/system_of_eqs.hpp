@@ -149,6 +149,12 @@ class System_of_eqs {
 	/// with the values recorded by sec_member at the same fields. Same results up to round-off.
 	bool jx_shortcuts = true ;
 	std::vector<char> prune_skip_mask ; ///< Per domain: no pruning there (do_JX: the variable domains); empty = none.
+	/// do_col_J (fast_column_setup): the variable domains hold a zero derivative and are updated for the fields of
+	/// \c vd_clean_generation (the previous column was no shape coefficient), so a column beyond the \c vd_count
+	/// shape coefficients need not locate itself there again. Cleared by xx_to_ders and find_variable_domains.
+	bool vd_clean = false ;
+	long vd_clean_generation = -1 ;
+	int vd_count = 0 ;
 	long column_stamp = 0 ; ///< Incremented by every do_col_J (validity of Ope_eq::der_is_zero).
 	long field_generation = 0 ; ///< Incremented when the fields are copied to the terms (cache validity).
 	/// do_col_J gives a derivative only to the term holding the column's coefficient, instead of building one for

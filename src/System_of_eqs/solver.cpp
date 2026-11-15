@@ -132,6 +132,7 @@ void System_of_eqs::find_variable_domains() {
 		return ;
 	variable_domains_known = true ;
 	variable_domains.clear() ;
+	vd_clean = false ;  // affecte_coef_to_variable_domains below sets shape derivatives
 	int const nvd = espace.nbr_unknowns_from_variable_domains() ;
 	for (int cc=0 ; cc<nvd ; cc++) {
 		int conte = 0 ;
@@ -254,7 +255,14 @@ Array<double> System_of_eqs::do_col_J (int cc) {
 	Array<int> zedoms (2) ;
 	zedoms = - 1 ;
 	// Variable Domains :
-	espace.affecte_coef_to_variable_domains(conte, cc, zedoms) ;
+	if (fast_column_setup && vd_clean && (vd_clean_generation==field_generation) && (cc>=vd_count))
+		conte = vd_count ;  // they already hold a zero derivative (affecte_coef would set it again)
+	else {
+		espace.affecte_coef_to_variable_domains(conte, cc, zedoms) ;
+		vd_count = conte ;
+		vd_clean = (zedoms(0)==-1) && (zedoms(1)==-1) ;
+		vd_clean_generation = field_generation ;
+	}
 	setup_lap(times_col_J.setup_vd) ;
 	column_stamp ++ ;
 	prune_active = prune_zero_derivatives ;

@@ -567,6 +567,7 @@ void System_of_eqs::xx_to_ders (const Array<double>& xx) {
 	int conte = 0 ;
 	int pos_term = 0 ;
 	
+	vd_clean = false ;
 	espace.xx_to_ders_variable_domains(xx, conte) ;
 	
 	for (int i=0 ; i<nvar_double ; i++) {
