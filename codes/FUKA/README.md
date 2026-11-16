@@ -93,10 +93,20 @@ The three are alternatives for the same Newton iteration and give the same solut
 `solver_precision`; only one is used per run (e.g. `export KADATH_LINSOLVE=mumps` before `mpirun`). Use the
 default unless a run fails to converge.
 
-For very large Jacobians (above about 1e9 non-zeros) rank 0 can run out of memory, because by default it gathers the
-whole matrix for the MUMPS analysis. `export KADATH_MUMPS_INPUT=distributed` keeps the matrix distributed and gathers
-only the entries needed for the column permutation, so rank 0's peak is lower. It is slower for typical sizes (the
-permutation is computed on rank 0), so the default stays `centralized`. Either way, give rank 0 a node with free memory.
+The Newton solvers keep the Jacobian distributed for MUMPS: rank 0 gathers only a sample of large entries (about
+10 % of a large matrix) to compute the column permutation that puts large entries on the diagonal, instead of the
+whole matrix. `export KADATH_MUMPS_INPUT=centralized` gathers the whole matrix on rank 0 and lets MUMPS compute the
+permutation (the previous behaviour; same solutions, more memory on rank 0). Rank 0 still runs the MUMPS analysis
+of the whole sparsity pattern and needs the most memory of all ranks for the largest Jacobians: give it a node
+with free memory.
+
+If the MUMPS factors do not fit in memory (the analysis estimate per rank exceeds 80 % of the free memory per rank,
+or the factorization still runs out of memory at that limit), FUKA writes the factors to disk (MUMPS out-of-core)
+and logs `MUMPS: OUT-OF-CORE: insufficient memory ...` with the directory used. The run continues but is slower,
+since every solve, including each GMRES iteration, reads the factors back. `KADATH_MUMPS_OOC=off` makes such a run
+stop with an insufficient-memory error instead, `KADATH_MUMPS_OOC=on` always uses the disk, and
+`KADATH_MUMPS_OOC_DIR=<dir>` sets the directory (default `$TMPDIR`, else `/tmp`; a node-local disk is fastest).
+Out-of-core lowers the factorization memory of every rank, not the analysis memory of rank 0.
 
 ## Memory
 
@@ -108,8 +118,10 @@ The memory of a run is the sum of two parts:
    default binaries.
 2. The linear solver. Dense ScaLAPACK needs about 40 n^2 bytes in total (n unknowns: 46 GB for n = 34,815),
    independent of the number of ranks. Newton-Krylov and MUMPS store the sparse factors (0.1-0.7 GB for the
-   cases below) and rank 0 additionally holds the gathered Jacobian for the MUMPS analysis (2-13 GB, growing
-   with n), so the first node needs more memory than the others.
+   cases below) and rank 0 additionally holds the sparsity pattern for the MUMPS analysis and the gathered
+   sample of large entries, so the first node needs more memory than the others. Rank 0 peak, default
+   (distributed) vs `KADATH_MUMPS_INPUT=centralized`: BBH res 11 6.6 vs 10.7 GB, BHNS res 11 11.9 vs 18.7 GB;
+   the other ranks about 0.9-1.3 GB each. The table below was measured with centralized input.
 
 The solvers print the peak memory per rank, per node and in total after every Newton step
 (`Memory high-water mark (VmHWM)`), which is the quantity to size a run with.
@@ -136,8 +148,9 @@ Values in parentheses are estimated from the 40 n^2 bytes of the dense solver pl
   Jacobian assembly but add 0.2-0.5 GB per rank of replicated memory.
 - Keep the first node's memory (`max ... GB per node` in the log) below the node memory; it is the largest.
   Rank 0 grows with the Jacobian's non-zeros: about 53 GB at 1.5e9 and 149 GB at 2.8e9 (Kerr-Schild binaries,
-  64-bit METIS for the latter). For such cases put rank 0 alone on the first node (e.g. a heterogeneous job, or
-  a host file with one slot on the first node), or use `KADATH_MUMPS_INPUT=distributed`.
+  centralized input, 64-bit METIS for the latter; distributed input, the default now, lowers this). For such
+  cases put rank 0 alone on the first node (e.g. a heterogeneous job, or a host file with one slot on the first
+  node).
 - Use `OMP_NUM_THREADS=1` (one MPI rank per core).
 
 # 6. Acknowledgements

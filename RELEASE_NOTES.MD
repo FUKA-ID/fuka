@@ -22,8 +22,12 @@
   `installation.md`). With 32-bit orderings MUMPS stops with `INFOG(1) = -51` once the graph of A + A^T has
   more than 2^31 - 1 entries; FUKA then retries with MUMPS's internal AMF ordering, which has no such limit
   but gives larger factors, instead of repeating the same failure for every configuration.
-* `KADATH_MUMPS_INPUT=distributed` (default `centralized`): distributed MUMPS input with the column permutation
-  computed from gathered large entries, which lowers rank 0's peak memory for very large Jacobians.
+* Distributed MUMPS input by default: the column permutation is computed from a sample of large entries gathered
+  on rank 0 (grown in rounds only where needed) instead of the whole matrix; rank 0's peak memory is about a third
+  lower and runs are faster. `KADATH_MUMPS_INPUT=centralized` gathers the whole matrix as before.
+* MUMPS out-of-core when memory is short: if the factors do not fit in memory they are written to disk
+  (logged as `MUMPS: OUT-OF-CORE: insufficient memory ...`); `KADATH_MUMPS_OOC=off` stops with an error instead,
+  `on` always uses the disk, `KADATH_MUMPS_OOC_DIR` sets the directory.
 ### Bug Fixes
 * Solutions, checkpoints and config files are written atomically (temporary file, `fsync`, rename) by
   `bco_utils::save_to_file` and `write_config`. Rank 0 rewrites e.g. `ns_regrid.dat` under the same name

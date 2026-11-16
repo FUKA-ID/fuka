@@ -318,6 +318,53 @@ void check_retry_ladder(MumpsOptions base, std::string const& label) {
               std::to_string(status.size()) + " succeeds");
 }
 
+/// Automatic out-of-core: with 1 MB of "available" memory per rank the factors cannot fit in core; auto must
+/// switch to disk (decision only: the workspace is set explicitly) and still solve exactly, never must return kInsufficientMemory, and with the real memory
+/// auto must stay in core.
+void check_out_of_core_decision(MumpsOptions options, std::string const& label) {
+    options.verbosity = 1;
+    Matrix const a = make_matrix(6, 40, 3, 51, false);
+    int const n = static_cast<int>(a.size());
+    std::vector<double> x_true(n, 1.);
+    std::vector<double> const b = multiply(a, x_true);
+    {
+        MumpsOptions o = options;
+        o.out_of_core = kOutOfCoreAuto;
+        std::vector<double> x = b;
+        SparseTriplets local = local_columns(a);
+        MumpsSolver solver(MPI_COMM_WORLD, o);
+        int const status = solver.solve(n, local, x);
+        check(status == 0 && !solver.stats().out_of_core,
+              label + " auto, enough memory: in core (status " + std::to_string(status) + ")");
+    }
+    {
+        MumpsOptions o = options;
+        o.out_of_core = kOutOfCoreAuto;
+        o.available_mem_mb = 1;
+        o.max_mem_mb = 256;  // workspace given explicitly: a 1 MB budget is too small even out of core
+        std::vector<double> x = b;
+        SparseTriplets local = local_columns(a);
+        MumpsSolver solver(MPI_COMM_WORLD, o);
+        int const status = solver.solve(n, local, x);
+        double err = 0.;
+        for (int i = 0; i < n; ++i)
+            err = std::max(err, std::fabs(x[i] - 1.));
+        check(status == 0 && solver.stats().out_of_core && err < 1e-10,
+              label + " auto, 1 MB per rank: out of core, status " + std::to_string(status) + ", max error " + sci(err));
+    }
+    {
+        MumpsOptions o = options;
+        o.out_of_core = kOutOfCoreNever;
+        o.available_mem_mb = 1;
+        std::vector<double> x = b;
+        SparseTriplets local = local_columns(a);
+        MumpsSolver solver(MPI_COMM_WORLD, o);
+        int const status = solver.solve(n, local, x);
+        check(status == kInsufficientMemory,
+              label + " off, 1 MB per rank: kInsufficientMemory (status " + std::to_string(status) + ")");
+    }
+}
+
 /// Block low-rank factors (MumpsOptions::blr_tolerance) are approximate: the solve must succeed with the
 /// relaxed residual check of a preconditioner, the reported compressed size must not exceed the full-rank one,
 /// and the retry ladder must fall back to full-rank factors.
@@ -422,10 +469,14 @@ int main(int argc, char** argv) {
     MumpsOptions out_of_core = centralized;
     char const* tmpdir = std::getenv("TMPDIR");
     out_of_core.ooc_dir = tmpdir != nullptr && tmpdir[0] != 0 ? tmpdir : "/tmp";
+    out_of_core.out_of_core = kOutOfCoreAlways;
     run_case(out_of_core, "centralized/METIS out-of-core");
     MumpsOptions out_of_core_distributed = distributed;
     out_of_core_distributed.ooc_dir = out_of_core.ooc_dir;
+    out_of_core_distributed.out_of_core = kOutOfCoreAlways;
     run_case(out_of_core_distributed, "distributed/METIS out-of-core");
+    check_out_of_core_decision(centralized, "centralized");
+    check_out_of_core_decision(distributed, "distributed");
     check_blr(centralized, "centralized BLR 1e-8");
     check_blr(distributed, "distributed BLR 1e-8");
     check_distribution_independence(centralized,

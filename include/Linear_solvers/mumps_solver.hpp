@@ -17,6 +17,11 @@ namespace linear_solvers {
 
 /// Settings of MumpsSolver; ICNTL numbers refer to the MUMPS 5.8 user guide. The defaults are the ones the
 /// Newton solvers use; the other values exist for the retry ladder and the tests.
+/// MumpsOptions::out_of_core values.
+constexpr int kOutOfCoreNever = 0;
+constexpr int kOutOfCoreAuto = 1;
+constexpr int kOutOfCoreAlways = 2;
+
 struct MumpsOptions {
     /// Gather the matrix on rank 0 (ICNTL(18)=0) so MUMPS can compute the zero-free-diagonal permutation
     /// ICNTL(6) itself; otherwise use distributed assembled input (ICNTL(18)=3), which avoids the copy on
@@ -94,11 +99,19 @@ struct MumpsOptions {
     /// fronts. 0 = full-rank factors. The factors then belong to a perturbed matrix, so only preconditioners
     /// should use it, with residual_tolerance well above blr_tolerance.
     double blr_tolerance = 0.;
-    /// Out-of-core factorization (ICNTL(22) = 1) with the factor files in this directory; empty = in core.
-    /// Lowers the factorization memory of every rank to the active fronts; every later solve (also JOB = 3,
-    /// e.g. each GMRES preconditioner application) reads the factors back from disk. It does not change the
-    /// analysis, whose gathered graph sets the peak on rank 0.
+    /// Out-of-core factorization (ICNTL(22) = 1): the factors are written to files in ooc_dir and every later
+    /// solve (also JOB = 3, each GMRES preconditioner application) reads them back, so it is slower. It lowers
+    /// the factorization memory of every rank to the active fronts, not the analysis memory of rank 0.
+    ///   kOutOfCoreNever: if the in-core estimate does not fit, solve() returns kInsufficientMemory;
+    ///   kOutOfCoreAuto: out of core only when the in-core estimate (largest per rank) exceeds 80 % of the free
+    ///     memory per rank, or when the factorization still runs out of memory at that limit; logged on rank 0;
+    ///   kOutOfCoreAlways: always out of core.
+    int out_of_core = kOutOfCoreAuto;
+    /// Directory of the out-of-core files; empty = $TMPDIR, else /tmp. Node-local disks are fastest.
     std::string ooc_dir;
+    /// Free memory per rank (MB) for the out-of-core decision and the ICNTL(23) cap; 0 = measured
+    /// (MemAvailable / ranks on the node, minimum over the nodes). Set by tests.
+    long available_mem_mb = 0;
 };
 
 /// Statistics of the last MumpsSolver::solve call.
@@ -119,6 +132,8 @@ struct MumpsStats {
         0;  ///< INFOG(13): pivots delayed by numerical pivoting (also set on failure).
     double relative_residual =
         -1.;  ///< max|A x - b| / max|b| of the returned solution.
+    bool out_of_core =
+        false;  ///< The factors of the last solve were written to disk (ICNTL(22) = 1).
     long mem_budget_mb =
         0;  ///< ICNTL(23) of the last factorization attempt (MB per rank).
     double time_gather =
@@ -134,6 +149,8 @@ struct MumpsStats {
 constexpr int kInaccurateSolution = -1000;
 /// Status returned by MumpsSolver::solve when no perfect matching was found for the column permutation.
 constexpr int kNoMatching = -1001;
+/// Status returned by MumpsSolver::solve when the factors do not fit in memory and out_of_core = kOutOfCoreNever.
+constexpr int kInsufficientMemory = -1002;
 
 /// Unsymmetric sparse direct solve of A x = b with MUMPS on a communicator.
 class MumpsSolver {

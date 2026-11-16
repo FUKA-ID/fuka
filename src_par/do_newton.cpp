@@ -499,32 +499,38 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	}
 
 	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
-	// KADATH_MUMPS_INPUT=distributed: distributed input with the column permutation computed in the wrapper
-	// (MumpsOptions::matching_entries) instead of gathering the matrix on rank 0 for MUMPS. Rank 0 then holds the
-	// gathered large entries during the matching and the analysis graph afterwards, not both plus the values, which
-	// lowers its peak memory for very large Jacobians; on FUKA's CI-size binaries it is slower, so it is opt-in.
+	// Default KADATH_MUMPS_INPUT=distributed: distributed input with the column permutation computed in the wrapper
+	// (MumpsOptions::matching_entries/growth) instead of gathering the matrix on rank 0 for MUMPS. Rank 0 gathers
+	// a sample of large entries (about 10 % of large matrices), not the matrix plus MUMPS's copy: on the BBH/BHNS
+	// test cases its peak is 36-39 % lower and the runs are faster than with centralized input (MUMPS's own
+	// permutation takes most of its sequential analysis). KADATH_MUMPS_INPUT=centralized restores the gather.
 	static int input_mode = -1;
 	if (input_mode < 0) {
 		int mode = 0;
 		if (rank == 0) {
 			char const* env = std::getenv("KADATH_MUMPS_INPUT");
-			std::string const value = env ? env : "centralized";
-			if (value == "distributed")
-				mode = 1;
-			else if (value != "centralized")
-				std::cerr << "KADATH_MUMPS_INPUT=" << value << " unknown (centralized or distributed); using centralized"
+			std::string const value = env ? env : "distributed";
+			mode = 1;
+			if (value == "centralized")
+				mode = 0;
+			else if (value != "distributed")
+				std::cerr << "KADATH_MUMPS_INPUT=" << value << " unknown (centralized or distributed); using distributed"
 				          << std::endl;
-			if (mode == 1)
-				std::cout << "MUMPS input: distributed, column permutation computed by the wrapper" << std::endl;
+			if (mode == 0)
+				std::cout << "MUMPS input: centralized (KADATH_MUMPS_INPUT=centralized), matrix gathered on rank 0"
+				          << std::endl;
 		}
 		MPI_Bcast(&mode, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		input_mode = mode;
 	}
 	// KADATH_MUMPS_BLR=<eps>: block low-rank factors at relative accuracy eps (MumpsOptions::blr_tolerance), only
 	// for the Newton-Krylov preconditioner, whose step GMRES finishes with the true J v.
-	// KADATH_MUMPS_OOC=<dir>: out-of-core factors in <dir> (MumpsOptions::ooc_dir; node-local disk preferred).
+	// KADATH_MUMPS_OOC=auto (default) | off | on: out-of-core factors (MumpsOptions::out_of_core). auto writes the
+	// factors to disk only when they do not fit in memory, and says so in the log; off stops with an insufficient
+	// memory error instead; on always uses the disk. KADATH_MUMPS_OOC_DIR: directory (default $TMPDIR or /tmp).
 	static bool env_read = false;
 	static double blr_tolerance = 0.;
+	static int out_of_core = kOutOfCoreAuto;
 	static std::string ooc_dir;
 	if (!env_read) {
 		char buffer[1024] = {0};
@@ -532,26 +538,40 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 			char const* blr = std::getenv("KADATH_MUMPS_BLR");
 			blr_tolerance = blr ? std::atof(blr) : 0.;
 			char const* ooc = std::getenv("KADATH_MUMPS_OOC");
-			if (ooc)
-				std::snprintf(buffer, sizeof buffer, "%s", ooc);
+			std::string const mode = ooc ? ooc : "auto";
+			if (mode == "off" || mode == "0")
+				out_of_core = kOutOfCoreNever;
+			else if (mode == "on" || mode == "1")
+				out_of_core = kOutOfCoreAlways;
+			else if (mode != "auto")
+				std::cerr << "KADATH_MUMPS_OOC=" << mode << " unknown (auto, off, on); using auto" << std::endl;
+			char const* dir = std::getenv("KADATH_MUMPS_OOC_DIR");
+			if (dir)
+				std::snprintf(buffer, sizeof buffer, "%s", dir);
 			if (blr_tolerance > 0.)
 				std::cout << "MUMPS: block low-rank factors at tolerance " << blr_tolerance
 				          << " for the Newton-Krylov preconditioner" << std::endl;
-			if (buffer[0] != 0)
-				std::cout << "MUMPS: out-of-core factors in " << buffer << std::endl;
+			if (out_of_core == kOutOfCoreAlways)
+				std::cout << "MUMPS: out-of-core factors (KADATH_MUMPS_OOC=on)" << std::endl;
+			else if (out_of_core == kOutOfCoreNever)
+				std::cout << "MUMPS: out-of-core disabled (KADATH_MUMPS_OOC=off): stop if the factors do not fit in memory"
+				          << std::endl;
 		}
 		MPI_Bcast(&blr_tolerance, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(&out_of_core, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		MPI_Bcast(buffer, sizeof buffer, MPI_CHAR, 0, MPI_COMM_WORLD);
 		ooc_dir = buffer;
 		env_read = true;
 	}
 	MumpsOptions base_options;
+	base_options.out_of_core = out_of_core;
 	base_options.ooc_dir = ooc_dir;
 	if (preconditioner)
 		base_options.blr_tolerance = blr_tolerance;
 	if (input_mode == 1) {
 		base_options.centralized = false;
 		base_options.matching_entries = 16;
+		base_options.matching_growth = 4;
 		// KADATH_MUMPS_MATCHING="entries=16:rows=4:growth=4:warm=1" (any separator): sampling of the wrapper's matching.
 		static int matching[4] = {-1, -1, -1, -1};  // entries, rows, growth, warm
 		static bool matching_read = false;
@@ -598,6 +618,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 			          << ", pivots delayed = " << f.delayed_pivots << ", off-diagonal = " << f.off_diagonal_pivots
 			          << ", estimated factor entries = " << f.estimated_factor_entries << std::endl;
 		}
+		if (status == kInsufficientMemory)  // the other configurations need as much memory
+			break;
 		if (status == kGraphTooLarge && !internal_ordering) {
 			internal_ordering = true;
 			if (rank == 0)
@@ -619,6 +641,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		MumpsStats const& s = solver->stats();
 		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / (1.0 * n * n) << " % of dense), factors = "
 		          << s.factor_entries;
+		if (s.out_of_core)
+			std::cout << " (OUT-OF-CORE: factors on disk)";
 		if (s.compressed_factor_entries != s.factor_entries)
 			std::cout << " (" << s.compressed_factor_entries << " stored with BLR)";
 		std::cout << ", memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total

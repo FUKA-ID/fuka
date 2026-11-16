@@ -7,6 +7,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -368,8 +369,10 @@ std::vector<int> matching_permutation(int n,
         MPI_Bcast(&sent, 1, MPI_INT64_T, 0, comm);
         int stuck_n = static_cast<int>(stuck.size());
         MPI_Bcast(&stuck_n, 1, MPI_INT, 0, comm);
+        // The fraction cap protects rank 0's memory; below kSmallMatrix entries the gather costs nothing.
+        constexpr std::int64_t kSmallMatrix = 10000000;
         if (round + 1 >= m.max_rounds || stuck_n == 0 ||
-            sent >= m.max_fraction * total_nnz)
+            (total_nnz > kSmallMatrix && sent >= m.max_fraction * total_nnz))
             return {};
         stuck.resize(stuck_n);
         MPI_Bcast(stuck.data(), stuck_n, MPI_INT, 0, comm);
@@ -460,6 +463,9 @@ int MumpsSolver::solve(int n,
         settings.growth = options_.matching_growth;
         settings.warm_start = options_.matching_warm_start;
         settings.max_rounds = options_.matching_growth > 0 ? 16 : 8;
+        // With growth there is no fraction cap: continuing never needs more memory on rank 0 than the fallback
+        // (gather everything for MUMPS), and the doubling bounds the rounds. Mid-size FUKA matrices needed 30-35 %.
+        settings.max_fraction = options_.matching_growth > 0 ? 1.0 : 0.25;
         col_perm_ = matching_permutation(n, local, settings, comm_);
         stats_.time_matching = MPI_Wtime() - start;
         if (col_perm_.empty())
@@ -543,15 +549,14 @@ int MumpsSolver::solve(int n,
     set_icntl(35, blr ? 2 : 0);  // BLR factorization and solve
     if (blr)
         id_.cntl[7 - 1] = options_.blr_tolerance;
-    bool const ooc = !options_.ooc_dir.empty();
-    set_icntl(22, ooc ? 1 : 0);
-    if (ooc) {
-        std::snprintf(id_.ooc_tmpdir,
-                      sizeof id_.ooc_tmpdir,
-                      "%s",
-                      options_.ooc_dir.c_str());
-        std::snprintf(id_.ooc_prefix, sizeof id_.ooc_prefix, "kadath_mumps");
+    bool ooc = options_.out_of_core == kOutOfCoreAlways;
+    std::string ooc_dir = options_.ooc_dir;
+    if (ooc_dir.empty()) {
+        char const* tmpdir = std::getenv("TMPDIR");
+        ooc_dir = tmpdir != nullptr && tmpdir[0] != 0 ? tmpdir : "/tmp";
     }
+    std::snprintf(id_.ooc_tmpdir, sizeof id_.ooc_tmpdir, "%s", ooc_dir.c_str());
+    std::snprintf(id_.ooc_prefix, sizeof id_.ooc_prefix, "kadath_mumps");
 
     double start = MPI_Wtime();
     run(kJobAnalysis);
@@ -563,14 +568,59 @@ int MumpsSolver::solve(int n,
     // ICNTL(23): the same explicit working-memory budget on every rank. A rank whose analysis estimate is tiny
     // can receive delayed pivots during factorization; a percentage relaxation (ICNTL(14)) of a tiny estimate
     // stays too small (INFOG(1) = -9 on a BH Jacobian), a budget from the largest estimate does not.
-    long const share_mb = node_memory_share_mb(comm_);
+    long const share_mb = options_.available_mem_mb > 0
+                              ? options_.available_mem_mb
+                              : node_memory_share_mb(comm_);
     long const cap_mb = share_mb > 0 ? static_cast<long>(0.8 * share_mb)
                                      : LONG_MAX;
-    // Largest per-rank estimate of the chosen mode: INFOG(16) in core, INFOG(26) out of core, INFOG(36) / INFOG(38)
-    // the same with BLR factors (at the compression rate ICNTL(38) assumes); a low estimate only costs a retry.
-    int const full_rank_mb = infog(ooc ? 26 : 16);
-    int const blr_mb = blr ? infog(ooc ? 38 : 36) : 0;
-    long const estimate_mb = std::max(1, blr_mb > 0 ? blr_mb : full_rank_mb);
+    // Largest per-rank estimate of a mode: INFOG(16) in core, INFOG(26) out of core, INFOG(36) / INFOG(38) the
+    // same with BLR factors (at the compression rate ICNTL(38) assumes); a low estimate only costs a retry.
+    // INFOG values are global, share_mb is the minimum over the nodes: every rank takes the same decisions.
+    auto estimate_for = [&](bool out_of_core) -> long {
+        int const full_rank_mb = infog(out_of_core ? 26 : 16);
+        int const blr_mb = blr ? infog(out_of_core ? 38 : 36) : 0;
+        return std::max(1, blr_mb > 0 ? blr_mb : full_rank_mb);
+    };
+    auto insufficient_memory = [&](long need_mb) {
+        if (rank_ == 0)
+            std::cout
+                << "MUMPS: INSUFFICIENT MEMORY: the factorization needs about "
+                << need_mb << " MB per rank in core, " << cap_mb
+                << " MB per rank are available (80 % of the free node "
+                << "memory); out-of-core is disabled (KADATH_MUMPS_OOC=off). "
+                   "Use more nodes or fewer ranks "
+                << "per node, or KADATH_MUMPS_OOC=auto to write the factors to "
+                   "disk."
+                << std::endl;
+        stats_.mem_budget_mb = need_mb;
+        return kInsufficientMemory;
+    };
+    auto announce_out_of_core = [&](std::string const& reason) {
+        if (rank_ == 0)
+            std::cout << "MUMPS: OUT-OF-CORE: insufficient memory for in-core "
+                         "factors ("
+                      << reason << ", " << cap_mb
+                      << " MB per rank available): the factors are written to "
+                         "disk in "
+                      << ooc_dir
+                      << " and read back by every solve, which is slower. "
+                         "Out-of-core estimate "
+                      << estimate_for(true) << " MB per rank"
+                      << (estimate_for(true) > cap_mb
+                              ? " (still above the available memory)"
+                              : "")
+                      << ". KADATH_MUMPS_OOC=off stops instead." << std::endl;
+    };
+    if (!ooc && estimate_for(false) > cap_mb) {
+        if (options_.out_of_core == kOutOfCoreNever)
+            return insufficient_memory(estimate_for(false));
+        ooc = true;
+        announce_out_of_core("estimate " + std::to_string(estimate_for(false)) +
+                             " MB per rank");
+    }
+    set_icntl(22, ooc ? 1 : 0);
+    stats_.out_of_core = ooc;
+    long estimate_mb = estimate_for(ooc);
     long budget_mb = options_.max_mem_mb > 0
                          ? options_.max_mem_mb
                          : estimate_mb + estimate_mb / 4 +
@@ -585,11 +635,34 @@ int MumpsSolver::solve(int n,
         set_icntl(14, mem_relax);
         set_icntl(23, static_cast<int>(std::min<long>(budget_mb, INT_MAX)));
         run(kJobFactorSolve);
-        if (!is_workspace_error(infog(1)) ||
-            attempt == options_.max_mem_retries)
+        if (!is_workspace_error(infog(1)))
             break;
         long const next_mb =
             std::max(budget_mb, std::min(2 * budget_mb, cap_mb));
+        bool const at_cap = options_.max_mem_mb <= 0 && next_mb <= budget_mb;
+        if (at_cap && !ooc && options_.out_of_core == kOutOfCoreAuto) {
+            // In core does not fit even at the memory limit (e.g. delayed pivots): continue out of core.
+            ooc = true;
+            announce_out_of_core(
+                "workspace error INFOG(1) = " + std::to_string(infog(1)) +
+                " at " + std::to_string(budget_mb) + " MB per rank");
+            set_icntl(22, 1);
+            stats_.out_of_core = true;
+            estimate_mb = estimate_for(true);
+            budget_mb =
+                std::max(estimate_mb,
+                         std::min(estimate_mb + estimate_mb / 4 + 64, cap_mb));
+            attempt =
+                -1;  // a fresh set of retries out of core (switched only once)
+            continue;
+        }
+        if (attempt >= options_.max_mem_retries) {
+            if (at_cap && !ooc && options_.out_of_core == kOutOfCoreNever) {
+                stats_.time_factor_solve = MPI_Wtime() - start;
+                return insufficient_memory(budget_mb);
+            }
+            break;
+        }
         if (rank_ == 0)
             std::cout << "MUMPS: workspace too small (INFOG(1)=" << infog(1)
                       << ") with ICNTL(23)=" << budget_mb
@@ -716,6 +789,9 @@ std::string mumps_error_message(int infog1) {
             return "memory allocation failed (" + std::to_string(infog1) + ")";
         case -6:
             return "matrix is structurally singular (-6)";
+        case kInsufficientMemory:
+            return "insufficient memory for in-core factors and out-of-core "
+                   "disabled (KADATH_MUMPS_OOC=off)";
         case kGraphTooLarge:
             return "graph too large for the 32-bit METIS/ParMETIS ordering "
                    "(-51)";
