@@ -100,12 +100,14 @@ permutation (the previous behaviour; same solutions, more memory on rank 0). Ran
 of the whole sparsity pattern and needs the most memory of all ranks for the largest Jacobians: give it a node
 with free memory.
 
-If the MUMPS factors do not fit in memory (the analysis estimate per rank exceeds 80 % of the free memory per rank,
-or the factorization still runs out of memory at that limit), FUKA writes the factors to disk (MUMPS out-of-core)
+If the MUMPS factors do not fit in memory (on some node the sum of its ranks' analysis estimates exceeds 80 % of
+the node's free memory, or the factorization still runs out of memory at that limit), FUKA writes the factors to disk (MUMPS out-of-core)
 and logs `MUMPS: OUT-OF-CORE: insufficient memory ...` with the directory used. The run continues but is slower,
 since every solve, including each GMRES iteration, reads the factors back. `KADATH_MUMPS_OOC=off` makes such a run
 stop with an insufficient-memory error instead, `KADATH_MUMPS_OOC=on` always uses the disk, and
 `KADATH_MUMPS_OOC_DIR=<dir>` sets the directory (default `$TMPDIR`, else `/tmp`; a node-local disk is fastest).
+On diskless nodes `/tmp` is held in memory, so the factors written there take the same RAM: check with
+`df -T /tmp` in a job and point `KADATH_MUMPS_OOC_DIR` to a parallel file system instead.
 Out-of-core lowers the factorization memory of every rank, not the analysis memory of rank 0.
 
 ## Memory
