@@ -20,42 +20,86 @@ namespace linear_solvers {
 /// successive shortest augmenting paths (Dijkstra with row and column potentials), after a greedy start
 /// that matches every column to its largest entry when that row is free.
 ///
+/// Partial matching and dual potentials of a previous call, for a warm start on a superset of its entries.
+struct MatchingState {
+    std::vector<int> row_of_col, col_of_row;
+    std::vector<double> u, v;  ///< row and column potentials
+};
+
 /// Returns row_of_col (row matched to each column), or an empty vector if the matrix (as given) has no
 /// perfect matching, i.e. is structurally singular. In that case, if @p stuck is given, it receives the
 /// columns reached by the failed augmenting-path searches (sorted, unique): their entries outside the given
 /// pattern are the only ones that can complete the matching.
+/// @param colmax largest |entry| of every column of the full matrix; default: of the given entries.
+/// @param state warm start: if it holds a previous call's result (on a subset of these entries, with the same
+/// @p colmax), its matching and potentials are reused and only the unmatched columns are searched; it receives
+/// this call's (possibly partial) matching. Rows with new entries of negative reduced cost are unmatched and
+/// their columns searched again, so the result is the same optimum as without a warm start.
 inline std::vector<int> max_product_matching(
     int n,
     std::vector<std::int64_t> const& ptr,
     std::vector<int> const& row,
     std::vector<double> const& val,
-    std::vector<int>* stuck = nullptr) {
+    std::vector<int>* stuck = nullptr,
+    MatchingState* state = nullptr,
+    std::vector<double> const* colmax = nullptr) {
     constexpr double inf = std::numeric_limits<double>::infinity();
     std::vector<double> cost(row.size(), inf);
     for (int j = 0; j < n; ++j) {
-        double colmax = 0.;
-        for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k)
-            colmax = std::max(colmax, std::fabs(val[k]));
-        if (colmax == 0.)
+        double cmax = 0.;
+        if (colmax != nullptr)
+            cmax = (*colmax)[j];
+        else
+            for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k)
+                cmax = std::max(cmax, std::fabs(val[k]));
+        if (cmax == 0.)
             continue;
-        double const lmax = std::log(colmax);
+        double const lmax = std::log(cmax);
         for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k)
             if (val[k] != 0.)
-                cost[k] = lmax - std::log(std::fabs(val[k]));
+                cost[k] = std::max(0., lmax - std::log(std::fabs(val[k])));
     }
 
     std::vector<int> row_of_col(n, -1), col_of_row(n, -1);
     std::vector<double> u(n, 0.),
         v(n, 0.);  // row and column potentials; reduced cost c - u - v >= 0
 
-    // Greedy start on zero reduced cost: the largest entry of each column (cost 0), if its row is free.
-    for (int j = 0; j < n; ++j)
-        for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k)
-            if (cost[k] == 0. && col_of_row[row[k]] < 0) {
-                row_of_col[j] = row[k];
-                col_of_row[row[k]] = j;
-                break;
+    bool const warm = state != nullptr &&
+                      static_cast<int>(state->row_of_col.size()) == n;
+    if (warm) {
+        row_of_col = state->row_of_col;
+        col_of_row = state->col_of_row;
+        u = state->u;
+        v = state->v;
+        // Restore reduced costs >= 0 on the new entries. A row with a new entry of negative reduced cost is
+        // unmatched (its column is searched again below); a free row's potential can then be lowered, which
+        // only raises the reduced costs of its other entries. Matched entries stay tight, so the result is
+        // the maximum-product matching of all given entries, as without a warm start.
+        for (int j = 0; j < n; ++j)
+            for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k) {
+                int const i = row[k];
+                if (cost[k] < inf && cost[k] - u[i] - v[j] < 0. &&
+                    col_of_row[i] >= 0) {
+                    row_of_col[col_of_row[i]] = -1;
+                    col_of_row[i] = -1;
+                }
             }
+        for (int j = 0; j < n; ++j)
+            for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k) {
+                int const i = row[k];
+                if (cost[k] < inf && cost[k] - u[i] - v[j] < 0.)
+                    u[i] = cost[k] - v[j];
+            }
+    } else {
+        // Greedy start on zero reduced cost: the largest entry of each column (cost 0), if its row is free.
+        for (int j = 0; j < n; ++j)
+            for (std::int64_t k = ptr[j]; k < ptr[j + 1]; ++k)
+                if (cost[k] == 0. && col_of_row[row[k]] < 0) {
+                    row_of_col[j] = row[k];
+                    col_of_row[row[k]] = j;
+                    break;
+                }
+    }
 
     std::vector<double> dist(n, inf);
     std::vector<int> pred(n, -1);  // column from which a row was reached
@@ -146,6 +190,12 @@ inline std::vector<int> max_product_matching(
             done[i] = 0;
             pred[i] = -1;
         }
+    }
+    if (state != nullptr) {
+        state->row_of_col = row_of_col;
+        state->col_of_row = col_of_row;
+        state->u = u;
+        state->v = v;
     }
     if (stuck && !stuck->empty()) {
         std::sort(stuck->begin(), stuck->end());

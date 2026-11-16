@@ -392,6 +392,21 @@ int main(int argc, char** argv) {
     MumpsOptions matched_small = distributed;
     matched_small.matching_entries = 2;
     run_case(matched_small, "distributed+matching (2 entries per column)/METIS");
+    // Row candidates, gradual growth of the stuck columns and the cold restart of every round.
+    MumpsOptions rows = matched_small;
+    rows.matching_row_entries = 2;
+    run_case(rows, "distributed+matching (2 per column, 2 per row)/METIS");
+    MumpsOptions grown = matched_small;
+    grown.matching_growth = 2;
+    run_case(grown, "distributed+matching (2 per column, growth 2)/METIS");
+    MumpsOptions cold = grown;
+    cold.matching_warm_start = false;
+    run_case(cold, "distributed+matching (2 per column, growth 2, no warm start)/METIS");
+    MumpsOptions minimal = matched_small;
+    minimal.matching_entries = 1;
+    minimal.matching_row_entries = 1;
+    minimal.matching_growth = 1;
+    run_case(minimal, "distributed+matching (1 per column, 1 per row, growth 1)/METIS");
     // The fallback after INFOG(1) = -51 (graph too large for the 32-bit METIS): internal AMF ordering.
     run_case(with_internal_ordering(matched), "distributed+matching/AMF");
     run_case(with_internal_ordering(centralized), "centralized/AMF");

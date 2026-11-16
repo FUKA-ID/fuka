@@ -79,6 +79,16 @@ struct MumpsOptions {
     /// matching and the expansion gathered 64-91 % of the matrix on rank 0, so it saved no memory, and the
     /// matching took longer than MUMPS's own analysis (runs 1.2-2.2x slower than centralized input).
     int matching_entries = 0;
+    /// Distributed input with matching_entries > 0: also gather, of every row, the matching_row_entries entries
+    /// with the largest |a_ij| / max_k |a_kj| over all ranks (one MPI reduction of n x k candidates), so every
+    /// equation has candidates in the sample. 0 = column sample only.
+    int matching_row_entries = 0;
+    /// Distributed input with matching_entries > 0: when the sample holds no perfect matching, the columns reached
+    /// by the failed searches send their matching_growth next-largest entries (doubled every round, up to 16
+    /// rounds) instead of all their entries (0).
+    int matching_growth = 0;
+    /// Reuse the matching and potentials of the previous sampling round (only the unmatched columns are searched).
+    bool matching_warm_start = true;
     /// CNTL(7) of the block low-rank factorization (ICNTL(35) = 2): off-diagonal blocks of the fronts are
     /// compressed to this relative accuracy, which cuts factorization flops and factor memory on large 3-D-like
     /// fronts. 0 = full-rank factors. The factors then belong to a perturbed matrix, so only preconditioners

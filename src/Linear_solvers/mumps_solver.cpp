@@ -118,31 +118,76 @@ void gather_on_root(std::vector<T> const& local,
     }
 }
 
+/// Sampling of matching_permutation (see there).
+struct MatchingSettings {
+    int per_column = 16;
+    int per_row = 0;
+    int growth = 0;
+    bool warm_start = true;
+    int max_rounds = 8;
+    double max_fraction = 0.25;
+};
+
+/// One candidate of a row's top-k list: key = |a_ij| / max_k |a_kj| (the matching prefers large keys).
+struct RowSlot {
+    double key;
+    int col;
+    int pad;
+};
+
+int g_row_slots =
+    0;  // k of merge_row_slots (MPI user operations take no context)
+
+/// MPI reduction: merges two arrays of per-row top-k lists, keeping the k largest keys of every row.
+void merge_row_slots(void* in, void* inout, int* len, MPI_Datatype*) {
+    int const k = g_row_slots;
+    auto const* a = static_cast<RowSlot const*>(in);
+    auto* b = static_cast<RowSlot*>(inout);
+    std::vector<RowSlot> merged(2 * k);
+    for (int r = 0; r < *len; ++r) {
+        std::copy(a + r * k, a + (r + 1) * k, merged.begin());
+        std::copy(b + r * k, b + (r + 1) * k, merged.begin() + k);
+        std::partial_sort(merged.begin(),
+                          merged.begin() + k,
+                          merged.end(),
+                          [](RowSlot const& x, RowSlot const& y) {
+                              return x.key > y.key;
+                          });
+        std::copy(merged.begin(), merged.begin() + k, b + r * k);
+    }
+}
+
 /// Column permutation for distributed input (the ICNTL(6) maximum-product matching, which MUMPS only
-/// computes for a matrix centralized on rank 0). Every rank keeps, of each of its columns, the @p per_column
-/// largest entries and the @p per_column largest entries relative to their row maxima; only those are
-/// gathered on rank 0 and matched there. If they hold no perfect matching, rank 0 asks for all entries of
-/// the columns its failed searches reached (the only entries that can complete it) and matches again, for
-/// at most @p max_rounds rounds and while the gathered entries stay below @p max_fraction of the matrix.
+/// computes for a matrix centralized on rank 0). Only a sample of the entries is gathered on rank 0:
+/// - of each column, the @p m.per_column largest entries and the @p m.per_column largest relative to their
+///   row maxima;
+/// - of each row, the @p m.per_row entries with the largest |a_ij| / max_k |a_kj| over all ranks (an MPI
+///   reduction of per-row top-k lists), so that every equation has candidates;
+/// If the sample holds no perfect matching, rank 0 reports the columns its failed searches reached and those
+/// columns send more entries: their @p m.growth next-largest (doubled every round), or all of them if
+/// growth = 0. The matching of the previous round is reused if m.warm_start. At most m.max_rounds rounds while
+/// the gathered entries stay below m.max_fraction of the matrix.
 /// Returns, on every rank, the original column (1-based) of permuted column i, so that row i holds a large
 /// entry on the diagonal; empty if no perfect matching was found. Collective.
 std::vector<int> matching_permutation(int n,
                                       SparseTriplets const& local,
-                                      int per_column,
-                                      int max_rounds,
-                                      double max_fraction,
+                                      MatchingSettings const& m,
                                       MPI_Comm comm) {
     int rank, nproc;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &nproc);
+    double const start = MPI_Wtime();
 
-    std::vector<double> rowmax(n, 0.);
-    for (std::int64_t k = 0; k < local.size(); ++k)
-        rowmax[local.rows[k] - 1] =
-            std::max(rowmax[local.rows[k] - 1], std::fabs(local.values[k]));
+    std::vector<double> rowmax(n, 0.), colmax(n, 0.);
+    for (std::int64_t k = 0; k < local.size(); ++k) {
+        double const a = std::fabs(local.values[k]);
+        rowmax[local.rows[k] - 1] = std::max(rowmax[local.rows[k] - 1], a);
+        colmax[local.cols[k] - 1] = std::max(colmax[local.cols[k] - 1], a);
+    }
     MPI_Allreduce(MPI_IN_PLACE, rowmax.data(), n, MPI_DOUBLE, MPI_MAX, comm);
+    MPI_Allreduce(MPI_IN_PLACE, colmax.data(), n, MPI_DOUBLE, MPI_MAX, comm);
 
-    // Local entries grouped by column.
+    // Local non-zero entries grouped by column; [col_begin[j], col_end[j]) in order.
     std::vector<std::int64_t> order;
     order.reserve(local.size());
     for (std::int64_t k = 0; k < local.size(); ++k)
@@ -151,41 +196,98 @@ std::vector<int> matching_permutation(int n,
     std::sort(order.begin(), order.end(), [&](std::int64_t a, std::int64_t b) {
         return local.cols[a] < local.cols[b];
     });
+    std::vector<std::int64_t> col_begin(n, 0), col_end(n, 0);
+    for (std::int64_t q = 0; q < static_cast<std::int64_t>(order.size());) {
+        int const j = local.cols[order[q]] - 1;
+        col_begin[j] = q;
+        while (q < static_cast<std::int64_t>(order.size()) &&
+               local.cols[order[q]] - 1 == j)
+            ++q;
+        col_end[j] = q;
+    }
     std::vector<char> keep(local.size(),
                            0);  // 1 = selected now, 2 = already sent
-    auto keep_largest = [&](auto first, auto last, auto key) {
-        if (last - first > per_column)
-            std::nth_element(first,
-                             first + per_column,
-                             last,
-                             [&](std::int64_t a, std::int64_t b) {
-                                 return key(a) > key(b);
-                             });
-        for (auto it = first; it != last && it - first < per_column; ++it)
-            keep[*it] = 1;
+    auto abs_key = [&](std::int64_t k) {
+        return std::fabs(local.values[k]);
     };
-    for (auto first = order.begin(); first != order.end();) {
-        int const col = local.cols[*first];
-        auto last = first;
-        while (last != order.end() && local.cols[*last] == col)
-            ++last;
-        keep_largest(first, last, [&](std::int64_t k) {
-            return std::fabs(local.values[k]);
+    auto row_key = [&](std::int64_t k) {
+        return std::fabs(local.values[k]) / rowmax[local.rows[k] - 1];
+    };
+    // Selects the `count` largest entries (by both keys) among the unsent ones of column j.
+    auto select = [&](int j, int count) {
+        auto first = order.begin() + col_begin[j],
+             last = order.begin() + col_end[j];
+        auto unsent = std::partition(first, last, [&](std::int64_t k) {
+            return keep[k] == 0;
         });
-        keep_largest(first, last, [&](std::int64_t k) {
-            return std::fabs(local.values[k]) / rowmax[local.rows[k] - 1];
-        });
-        first = last;
+        for (auto key : {0, 1}) {
+            if (unsent - first > count)
+                std::nth_element(first,
+                                 first + count,
+                                 unsent,
+                                 [&](std::int64_t a, std::int64_t b) {
+                                     return key == 0 ? abs_key(a) > abs_key(b)
+                                                     : row_key(a) > row_key(b);
+                                 });
+            for (auto it = first; it != unsent && it - first < count; ++it)
+                keep[*it] = 1;
+        }
+    };
+    for (int j = 0; j < n; ++j)
+        if (col_end[j] > col_begin[j])
+            select(j, m.per_column);
+
+    // Per-row candidates over all ranks.
+    if (m.per_row > 0) {
+        int const k = m.per_row;
+        std::vector<RowSlot> slots(static_cast<std::size_t>(n) * k,
+                                   RowSlot{-1., -1, 0});
+        for (std::int64_t q : order) {
+            int const i = local.rows[q] - 1, j = local.cols[q] - 1;
+            double const key = std::fabs(local.values[q]) / colmax[j];
+            RowSlot* row_slots = slots.data() + static_cast<std::size_t>(i) * k;
+            RowSlot* worst =
+                std::min_element(row_slots,
+                                 row_slots + k,
+                                 [](RowSlot const& x, RowSlot const& y) {
+                                     return x.key < y.key;
+                                 });
+            if (key > worst->key)
+                *worst = RowSlot{key, j, 0};
+        }
+        MPI_Datatype type;
+        MPI_Type_contiguous(static_cast<int>(k * sizeof(RowSlot)),
+                            MPI_BYTE,
+                            &type);
+        MPI_Type_commit(&type);
+        MPI_Op op;
+        MPI_Op_create(merge_row_slots, 1, &op);
+        g_row_slots = k;
+        MPI_Allreduce(MPI_IN_PLACE, slots.data(), n, type, op, comm);
+        MPI_Op_free(&op);
+        MPI_Type_free(&type);
+        for (std::int64_t q : order) {
+            if (keep[q] != 0)
+                continue;
+            int const i = local.rows[q] - 1, j = local.cols[q] - 1;
+            RowSlot const* row_slots = slots.data() +
+                                       static_cast<std::size_t>(i) * k;
+            for (int s = 0; s < k; ++s)
+                if (row_slots[s].col == j) {
+                    keep[q] = 1;
+                    break;
+                }
+        }
     }
-    std::vector<std::int64_t>().swap(order);
-    std::vector<double>().swap(rowmax);
 
     std::int64_t total_nnz = 0, sent = 0;
     std::int64_t const local_nnz = local.size();
     MPI_Allreduce(&local_nnz, &total_nnz, 1, MPI_INT64_T, MPI_SUM, comm);
 
     SparseTriplets global;  // rank 0: everything gathered so far
+    MatchingState state;    // rank 0: matching of the previous round
     std::vector<int> perm(n, 0);
+    int growth = m.growth;
     for (int round = 0;; ++round) {
         // Send the newly selected entries.
         SparseTriplets fresh;
@@ -238,24 +340,25 @@ std::vector<int> matching_permutation(int n,
                 val[at] = global.values[k];
             }
             std::vector<int> const row_of_col =
-                max_product_matching(n, ptr, row, val, &stuck);
-            if (!row_of_col.empty()) {
-                found = 1;
-                if (round > 0)
-                    std::cout
-                        << "MUMPS: matching round " << round
-                        << ": perfect matching on " << sent << " entries ("
-                        << 100. * sent / std::max<std::int64_t>(1, total_nnz)
-                        << " %)" << std::endl;
+                max_product_matching(n,
+                                     ptr,
+                                     row,
+                                     val,
+                                     &stuck,
+                                     m.warm_start ? &state : nullptr,
+                                     &colmax);
+            found = row_of_col.empty() ? 0 : 1;
+            std::cout << "MUMPS: matching round " << round << ": " << sent
+                      << " entries ("
+                      << 100. * sent / std::max<std::int64_t>(1, total_nnz)
+                      << " %), "
+                      << (found ? std::string("perfect matching")
+                                : std::to_string(stuck.size()) +
+                                      " columns reached by failed searches")
+                      << ", " << MPI_Wtime() - start << " s" << std::endl;
+            if (found)
                 for (int j = 0; j < n; ++j)
                     perm[row_of_col[j]] = j + 1;
-            } else {
-                std::cout << "MUMPS: matching round " << round << ": " << sent
-                          << " entries ("
-                          << 100. * sent / std::max<std::int64_t>(1, total_nnz)
-                          << " %), " << stuck.size()
-                          << " columns reached by failed searches" << std::endl;
-            }
         }
         MPI_Bcast(&found, 1, MPI_INT, 0, comm);
         if (found) {
@@ -265,18 +368,23 @@ std::vector<int> matching_permutation(int n,
         MPI_Bcast(&sent, 1, MPI_INT64_T, 0, comm);
         int stuck_n = static_cast<int>(stuck.size());
         MPI_Bcast(&stuck_n, 1, MPI_INT, 0, comm);
-        if (round + 1 >= max_rounds || stuck_n == 0 ||
-            sent >= max_fraction * total_nnz)
+        if (round + 1 >= m.max_rounds || stuck_n == 0 ||
+            sent >= m.max_fraction * total_nnz)
             return {};
         stuck.resize(stuck_n);
         MPI_Bcast(stuck.data(), stuck_n, MPI_INT, 0, comm);
-        std::vector<char> expand(n, 0);
-        for (int j : stuck)
-            expand[j] = 1;
-        for (std::int64_t k = 0; k < local.size(); ++k)
-            if (keep[k] == 0 && local.values[k] != 0. &&
-                expand[local.cols[k] - 1])
-                keep[k] = 1;
+        for (int j : stuck) {
+            if (col_end[j] == col_begin[j])
+                continue;
+            if (growth > 0)
+                select(j, growth);
+            else
+                for (std::int64_t q = col_begin[j]; q < col_end[j]; ++q)
+                    if (keep[order[q]] == 0)
+                        keep[order[q]] = 1;
+        }
+        if (growth > 0)
+            growth *= 2;
     }
 }
 
@@ -346,12 +454,13 @@ int MumpsSolver::solve(int n,
     col_perm_.clear();
     if (!options_.centralized && options_.matching_entries > 0) {
         double const start = MPI_Wtime();
-        col_perm_ = matching_permutation(n,
-                                         local,
-                                         options_.matching_entries,
-                                         8,
-                                         0.25,
-                                         comm_);
+        MatchingSettings settings;
+        settings.per_column = options_.matching_entries;
+        settings.per_row = options_.matching_row_entries;
+        settings.growth = options_.matching_growth;
+        settings.warm_start = options_.matching_warm_start;
+        settings.max_rounds = options_.matching_growth > 0 ? 16 : 8;
+        col_perm_ = matching_permutation(n, local, settings, comm_);
         stats_.time_matching = MPI_Wtime() - start;
         if (col_perm_.empty())
             return kNoMatching;

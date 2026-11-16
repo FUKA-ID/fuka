@@ -552,6 +552,31 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	if (input_mode == 1) {
 		base_options.centralized = false;
 		base_options.matching_entries = 16;
+		// KADATH_MUMPS_MATCHING="entries=16:rows=4:growth=4:warm=1" (any separator): sampling of the wrapper's matching.
+		static int matching[4] = {-1, -1, -1, -1};  // entries, rows, growth, warm
+		static bool matching_read = false;
+		if (!matching_read) {
+			if (rank == 0 && std::getenv("KADATH_MUMPS_MATCHING") != nullptr) {
+				std::string const spec = std::getenv("KADATH_MUMPS_MATCHING");
+				char const* names[4] = {"entries=", "rows=", "growth=", "warm="};
+				for (int f = 0; f < 4; ++f) {
+					std::size_t const at = spec.find(names[f]);
+					if (at != std::string::npos)
+						matching[f] = std::atoi(spec.c_str() + at + std::string(names[f]).size());
+				}
+				std::cout << "MUMPS matching: " << spec << std::endl;
+			}
+			MPI_Bcast(matching, 4, MPI_INT, 0, MPI_COMM_WORLD);
+			matching_read = true;
+		}
+		if (matching[0] >= 0)
+			base_options.matching_entries = matching[0];
+		if (matching[1] >= 0)
+			base_options.matching_row_entries = matching[1];
+		if (matching[2] >= 0)
+			base_options.matching_growth = matching[2];
+		if (matching[3] >= 0)
+			base_options.matching_warm_start = matching[3] != 0;
 	}
 	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(base_options);
 	int status = 0;

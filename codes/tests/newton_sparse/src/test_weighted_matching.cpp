@@ -192,6 +192,128 @@ int main() {
         check(entries_exist, "n = 2000 random: perfect matching on existing entries");
     }
 
+    // Warm start: a sample (the largest entry of every column plus half of the others) is matched first, then
+    // all entries are added and the matching continues from the sample's matching and potentials. The result
+    // must be the optimum (as without a warm start).
+    {
+        int warm_trials = 0, warm_perfect = 0, warm_optimal = 0;
+        double worst_gap = 0.;
+        for (int trial = 0; trial < 300; ++trial) {
+            int const n = 2 + trial % 7;
+            std::vector<std::vector<double>> a(n, std::vector<double>(n, 0.));
+            for (int i = 0; i < n; ++i)
+                for (int j = 0; j < n; ++j)
+                    if (unit(gen) < 0.6)
+                        a[i][j] = (unit(gen) < 0.5 ? -1. : 1.) * std::pow(10., mag(gen));
+            std::vector<int> perm(n);
+            std::iota(perm.begin(), perm.end(), 0);
+            double best = -INFINITY;
+            do {
+                best = std::max(best, log_product(a, perm));
+            } while (std::next_permutation(perm.begin(), perm.end()));
+            if (best == -INFINITY)
+                continue;
+            ++warm_trials;
+            std::vector<double> colmax(n, 0.);
+            std::vector<std::vector<double>> sample(n, std::vector<double>(n, 0.));
+            for (int j = 0; j < n; ++j) {
+                int arg = 0;
+                for (int i = 0; i < n; ++i)
+                    if (std::fabs(a[i][j]) > colmax[j]) {
+                        colmax[j] = std::fabs(a[i][j]);
+                        arg = i;
+                    }
+                for (int i = 0; i < n; ++i)
+                    if (i == arg || unit(gen) < 0.5)
+                        sample[i][j] = a[i][j];
+            }
+            Csc m = from_dense(sample);
+            MatchingState state;
+            std::vector<int> stuck;
+            max_product_matching(n, m.ptr, m.row, m.val, &stuck, &state, &colmax);  // complete or not
+            Csc full = from_dense(a);
+            stuck.clear();
+            std::vector<int> const r = max_product_matching(n, full.ptr, full.row, full.val, &stuck, &state, &colmax);
+            if (is_permutation(r, n) && log_product(a, r) > -INFINITY) {
+                ++warm_perfect;
+                double const gap = best - log_product(a, r);
+                worst_gap = std::max(worst_gap, gap);
+                if (gap <= 1e-10 * (1. + std::fabs(best)))
+                    ++warm_optimal;
+            }
+        }
+        check(warm_optimal == warm_trials, "warm start, random n <= 8: perfect matching in " +
+                                               std::to_string(warm_perfect) + " of " + std::to_string(warm_trials) +
+                                               " (optimal in " + std::to_string(warm_optimal) +
+                                               ", worst log-product gap " + std::to_string(worst_gap) + ")");
+    }
+
+    // Warm start on n = 2000: the 2 largest entries per column first, then all entries.
+    {
+        int const n = 2000;
+        std::vector<std::vector<std::pair<int, double>>> cols(n);
+        std::vector<int> p(n);
+        std::iota(p.begin(), p.end(), 0);
+        std::shuffle(p.begin(), p.end(), gen);
+        for (int j = 0; j < n; ++j) {
+            cols[j].push_back({p[j], std::pow(10., mag(gen))});
+            for (int k = 0; k < 10; ++k)
+                cols[j].push_back({static_cast<int>(gen() % n), std::pow(10., mag(gen))});
+            std::sort(cols[j].begin(), cols[j].end());
+            cols[j].erase(std::unique(cols[j].begin(), cols[j].end(),
+                                      [](auto const& x, auto const& y) { return x.first == y.first; }),
+                          cols[j].end());
+        }
+        auto to_csc = [&](int per_column, std::vector<std::int64_t>& ptr, std::vector<int>& row,
+                          std::vector<double>& val) {
+            ptr.assign(1, 0);
+            row.clear();
+            val.clear();
+            for (int j = 0; j < n; ++j) {
+                auto c = cols[j];
+                std::sort(c.begin(), c.end(), [](auto const& x, auto const& y) { return x.second > y.second; });
+                if (per_column > 0 && static_cast<int>(c.size()) > per_column)
+                    c.resize(per_column);
+                for (auto const& [i, x] : c) {
+                    row.push_back(i);
+                    val.push_back(x);
+                }
+                ptr.push_back(static_cast<std::int64_t>(row.size()));
+            }
+        };
+        std::vector<double> colmax(n, 0.);
+        for (int j = 0; j < n; ++j)
+            for (auto const& e : cols[j])
+                colmax[j] = std::max(colmax[j], e.second);
+        std::vector<std::int64_t> ptr;
+        std::vector<int> row;
+        std::vector<double> val;
+        to_csc(0, ptr, row, val);
+        std::vector<int> const cold = max_product_matching(n, ptr, row, val, nullptr, nullptr, &colmax);
+        to_csc(2, ptr, row, val);
+        MatchingState state;
+        std::vector<int> stuck;
+        std::vector<int> r = max_product_matching(n, ptr, row, val, &stuck, &state, &colmax);
+        bool const sample_failed = r.empty();
+        to_csc(0, ptr, row, val);
+        stuck.clear();
+        r = max_product_matching(n, ptr, row, val, &stuck, &state, &colmax);
+        auto product = [&](std::vector<int> const& rc) {
+            double s = 0.;
+            for (int j = 0; j < n; ++j)
+                for (auto const& [i, x] : cols[j])
+                    if (i == rc[j])
+                        s += std::log(x / colmax[j]);
+            return s;
+        };
+        bool const ok = is_permutation(cold, n) && is_permutation(r, n) &&
+                        std::fabs(product(r) - product(cold)) <= 1e-9 * (1. + std::fabs(product(cold)));
+        check(ok, "warm start, n = 2000: perfect matching (sample " +
+                      std::string(sample_failed ? "incomplete" : "complete") + ", log product warm " +
+                      (ok ? std::to_string(product(r)) : "-") + " vs cold " +
+                      (ok ? std::to_string(product(cold)) : "-") + ")");
+    }
+
     std::cout << "test_weighted_matching: " << (failures == 0 ? "PASS" : "FAIL") << " (" << failures
               << " failures)" << std::endl;
     return failures == 0 ? 0 : 1;
