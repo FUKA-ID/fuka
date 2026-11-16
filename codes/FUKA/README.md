@@ -93,6 +93,11 @@ The three are alternatives for the same Newton iteration and give the same solut
 `solver_precision`; only one is used per run (e.g. `export KADATH_LINSOLVE=mumps` before `mpirun`). Use the
 default unless a run fails to converge.
 
+For very large Jacobians (above about 1e9 non-zeros) rank 0 can run out of memory, because by default it gathers the
+whole matrix for the MUMPS analysis. `export KADATH_MUMPS_INPUT=distributed` keeps the matrix distributed and gathers
+only the entries needed for the column permutation, so rank 0's peak is lower. It is slower for typical sizes (the
+permutation is computed on rank 0), so the default stays `centralized`. Either way, give rank 0 a node with free memory.
+
 ## Memory
 
 The memory of a run is the sum of two parts:

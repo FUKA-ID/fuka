@@ -470,7 +470,33 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	}
 
 	// Retry ladder on the same assembled matrix; every attempt passes the residual check or counts as failed.
-	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(MumpsOptions());
+	// KADATH_MUMPS_INPUT=distributed: distributed input with the column permutation computed in the wrapper
+	// (MumpsOptions::matching_entries) instead of gathering the matrix on rank 0 for MUMPS. Rank 0 then holds the
+	// gathered large entries during the matching and the analysis graph afterwards, not both plus the values, which
+	// lowers its peak memory for very large Jacobians; on FUKA's CI-size binaries it is slower, so it is opt-in.
+	static int input_mode = -1;
+	if (input_mode < 0) {
+		int mode = 0;
+		if (rank == 0) {
+			char const* env = std::getenv("KADATH_MUMPS_INPUT");
+			std::string const value = env ? env : "centralized";
+			if (value == "distributed")
+				mode = 1;
+			else if (value != "centralized")
+				std::cerr << "KADATH_MUMPS_INPUT=" << value << " unknown (centralized or distributed); using centralized"
+				          << std::endl;
+			if (mode == 1)
+				std::cout << "MUMPS input: distributed, column permutation computed by the wrapper" << std::endl;
+		}
+		MPI_Bcast(&mode, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		input_mode = mode;
+	}
+	MumpsOptions base_options;
+	if (input_mode == 1) {
+		base_options.centralized = false;
+		base_options.matching_entries = 16;
+	}
+	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(base_options);
 	int status = 0;
 	bool internal_ordering = false;  // after -51 every attempt uses AMF: the graph is the same for all of them
 	for (std::size_t attempt = 0; attempt < ladder.size(); ++attempt) {
