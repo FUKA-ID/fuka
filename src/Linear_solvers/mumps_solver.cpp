@@ -14,6 +14,7 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <utility>
 
 namespace Kadath {
 namespace linear_solvers {
@@ -59,6 +60,47 @@ long node_memory_share_mb(MPI_Comm comm) {
     long min_share = 0;
     MPI_Allreduce(&share, &min_share, 1, MPI_LONG, MPI_MIN, comm);
     return min_share;
+}
+
+/// Memory need of the node that is shortest of memory: every rank passes its own need (MB); per node the needs of
+/// its ranks are summed and compared with 80 % of the node's free memory (MemAvailable, or available_per_rank_mb x
+/// ranks on the node if > 0). Returns {need, usable} (MB) of the node with the largest need / usable ratio, the
+/// same on every rank. Collective.
+std::pair<long, long> tightest_node(long local_mb,
+                                    long available_per_rank_mb,
+                                    MPI_Comm comm) {
+    MPI_Comm node;
+    MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &node);
+    int ranks_on_node = 1;
+    MPI_Comm_size(node, &ranks_on_node);
+    long need = 0;
+    MPI_Allreduce(&local_mb, &need, 1, MPI_LONG, MPI_SUM, node);
+    MPI_Comm_free(&node);
+    long available_mb = 0;
+    if (available_per_rank_mb > 0)
+        available_mb = available_per_rank_mb * ranks_on_node;
+    else {
+        std::ifstream meminfo("/proc/meminfo");
+        std::string key, unit;
+        long value = 0;
+        while (meminfo >> key >> value >> unit)
+            if (key == "MemAvailable:") {
+                available_mb = value / 1024;
+                break;
+            }
+    }
+    long const usable = static_cast<long>(0.8 * available_mb);
+
+    struct {
+        double ratio;
+        int rank;
+    } mine{static_cast<double>(need) / std::max(1L, usable), 0}, worst{};
+
+    MPI_Comm_rank(comm, &mine.rank);
+    MPI_Allreduce(&mine, &worst, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
+    long values[2] = {need, usable};
+    MPI_Bcast(values, 2, MPI_LONG, worst.rank, comm);
+    return {values[0], values[1]};
 }
 
 template <typename T>
@@ -631,42 +673,51 @@ int MumpsSolver::solve(int n,
         int const blr_mb = blr ? infog(out_of_core ? 38 : 36) : 0;
         return std::max(1, blr_mb > 0 ? blr_mb : full_rank_mb);
     };
-    auto insufficient_memory = [&](long need_mb) {
+    // In core or out of core: per node, the sum of every rank's own estimate (INFO(15) in core, INFO(17) out of core;
+    // full-rank, an upper bound with BLR) against 80 % of the node's free memory. The node shortest of memory decides.
+    auto const in_core = tightest_node(std::max(1, id_.info[15 - 1]),
+                                       options_.available_mem_mb,
+                                       comm_);
+    auto insufficient_memory = [&](long need_mb, long usable_mb) {
         if (rank_ == 0)
             std::cout
                 << "MUMPS: INSUFFICIENT MEMORY: the factorization needs about "
-                << need_mb << " MB per rank in core, " << cap_mb
-                << " MB per rank are available (80 % of the free node "
-                << "memory); out-of-core is disabled (KADATH_MUMPS_OOC=off). "
-                   "Use more nodes or fewer ranks "
-                << "per node, or KADATH_MUMPS_OOC=auto to write the factors to "
-                   "disk."
-                << std::endl;
+                << need_mb
+                << " MB on the fullest node (sum over its ranks, in core), "
+                << usable_mb
+                << " MB are available there (80 % of its free memory); "
+                   "out-of-core is disabled "
+                << "(KADATH_MUMPS_OOC=off). Use more nodes or fewer ranks per "
+                   "node, or KADATH_MUMPS_OOC=auto "
+                << "to write the factors to disk." << std::endl;
         stats_.mem_budget_mb = need_mb;
         return kInsufficientMemory;
     };
     auto announce_out_of_core = [&](std::string const& reason) {
+        auto const out_of_core = tightest_node(std::max(1, id_.info[17 - 1]),
+                                               options_.available_mem_mb,
+                                               comm_);
         if (rank_ == 0)
             std::cout << "MUMPS: OUT-OF-CORE: insufficient memory for in-core "
                          "factors ("
-                      << reason << ", " << cap_mb
-                      << " MB per rank available): the factors are written to "
-                         "disk in "
+                      << reason << "): the factors are written to disk in "
                       << ooc_dir
                       << " and read back by every solve, which is slower. "
-                         "Out-of-core estimate "
-                      << estimate_for(true) << " MB per rank"
-                      << (estimate_for(true) > cap_mb
+                         "Out-of-core need "
+                      << out_of_core.first << " MB on the fullest node, "
+                      << out_of_core.second << " MB available"
+                      << (out_of_core.first > out_of_core.second
                               ? " (still above the available memory)"
                               : "")
                       << ". KADATH_MUMPS_OOC=off stops instead." << std::endl;
     };
-    if (!ooc && estimate_for(false) > cap_mb) {
+    if (!ooc && in_core.first > in_core.second) {
         if (options_.out_of_core == kOutOfCoreNever)
-            return insufficient_memory(estimate_for(false));
+            return insufficient_memory(in_core.first, in_core.second);
         ooc = true;
-        announce_out_of_core("estimate " + std::to_string(estimate_for(false)) +
-                             " MB per rank");
+        announce_out_of_core("in-core need " + std::to_string(in_core.first) +
+                             " MB on the fullest node, " +
+                             std::to_string(in_core.second) + " MB available");
     }
     set_icntl(22, ooc ? 1 : 0);
     stats_.out_of_core = ooc;
@@ -709,7 +760,7 @@ int MumpsSolver::solve(int n,
         if (attempt >= options_.max_mem_retries) {
             if (at_cap && !ooc && options_.out_of_core == kOutOfCoreNever) {
                 stats_.time_factor_solve = MPI_Wtime() - start;
-                return insufficient_memory(budget_mb);
+                return insufficient_memory(in_core.first, in_core.second);
             }
             break;
         }
