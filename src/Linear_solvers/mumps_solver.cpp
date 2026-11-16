@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -429,6 +430,19 @@ int MumpsSolver::solve(int n,
     // Up to 3 steps of iterative refinement with the factors (stops when converged): a safeguard for Jacobians
     // with many delayed pivots, at the cost of a few solves.
     set_icntl(10, 3);
+    bool const blr = options_.blr_tolerance > 0.;
+    set_icntl(35, blr ? 2 : 0);  // BLR factorization and solve
+    if (blr)
+        id_.cntl[7 - 1] = options_.blr_tolerance;
+    bool const ooc = !options_.ooc_dir.empty();
+    set_icntl(22, ooc ? 1 : 0);
+    if (ooc) {
+        std::snprintf(id_.ooc_tmpdir,
+                      sizeof id_.ooc_tmpdir,
+                      "%s",
+                      options_.ooc_dir.c_str());
+        std::snprintf(id_.ooc_prefix, sizeof id_.ooc_prefix, "kadath_mumps");
+    }
 
     double start = MPI_Wtime();
     run(kJobAnalysis);
@@ -443,8 +457,11 @@ int MumpsSolver::solve(int n,
     long const share_mb = node_memory_share_mb(comm_);
     long const cap_mb = share_mb > 0 ? static_cast<long>(0.8 * share_mb)
                                      : LONG_MAX;
-    long const estimate_mb =
-        std::max(1, infog(16));  // largest per-rank in-core estimate
+    // Largest per-rank estimate of the chosen mode: INFOG(16) in core, INFOG(26) out of core, INFOG(36) / INFOG(38)
+    // the same with BLR factors (at the compression rate ICNTL(38) assumes); a low estimate only costs a retry.
+    int const full_rank_mb = infog(ooc ? 26 : 16);
+    int const blr_mb = blr ? infog(ooc ? 38 : 36) : 0;
+    long const estimate_mb = std::max(1, blr_mb > 0 ? blr_mb : full_rank_mb);
     long budget_mb = options_.max_mem_mb > 0
                          ? options_.max_mem_mb
                          : estimate_mb + estimate_mb / 4 +
@@ -484,6 +501,8 @@ int MumpsSolver::solve(int n,
         return infog(1);
 
     stats_.factor_entries = millions_if_negative(infog(29));
+    stats_.compressed_factor_entries = blr ? millions_if_negative(infog(35))
+                                           : stats_.factor_entries;
     stats_.factor_flops = id_.rinfog[3 - 1];
     stats_.peak_mem_mb_max = infog(21);
     stats_.peak_mem_mb_total = infog(22);
@@ -554,6 +573,7 @@ std::vector<MumpsAttempt> mumps_retry_ladder(MumpsOptions const& base) {
     recovery.scaling = -1;
     recovery.max_mem_mb = 0;
     recovery.max_mem_retries = MumpsOptions{}.max_mem_retries;
+    recovery.blr_tolerance = 0.;  // the retries use exact (full-rank) factors
 
     if (!base.centralized) {  // MUMPS's own permutation on the gathered matrix
         MumpsOptions centralized = recovery;

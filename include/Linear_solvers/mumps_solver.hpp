@@ -79,13 +79,25 @@ struct MumpsOptions {
     /// matching and the expansion gathered 64-91 % of the matrix on rank 0, so it saved no memory, and the
     /// matching took longer than MUMPS's own analysis (runs 1.2-2.2x slower than centralized input).
     int matching_entries = 0;
+    /// CNTL(7) of the block low-rank factorization (ICNTL(35) = 2): off-diagonal blocks of the fronts are
+    /// compressed to this relative accuracy, which cuts factorization flops and factor memory on large 3-D-like
+    /// fronts. 0 = full-rank factors. The factors then belong to a perturbed matrix, so only preconditioners
+    /// should use it, with residual_tolerance well above blr_tolerance.
+    double blr_tolerance = 0.;
+    /// Out-of-core factorization (ICNTL(22) = 1) with the factor files in this directory; empty = in core.
+    /// Lowers the factorization memory of every rank to the active fronts; every later solve (also JOB = 3,
+    /// e.g. each GMRES preconditioner application) reads the factors back from disk. It does not change the
+    /// analysis, whose gathered graph sets the peak on rank 0.
+    std::string ooc_dir;
 };
 
 /// Statistics of the last MumpsSolver::solve call.
 struct MumpsStats {
     std::int64_t nnz = 0;  ///< Global number of entries passed to MUMPS.
     std::int64_t factor_entries = 0;  ///< INFOG(29): entries in the LU factors.
-    double factor_flops = 0.;         ///< RINFOG(3): flops of the elimination.
+    std::int64_t compressed_factor_entries =
+        0;  ///< INFOG(35): entries stored with BLR compression (= factor_entries without BLR).
+    double factor_flops = 0.;  ///< RINFOG(3): flops of the elimination.
     int peak_mem_mb_max =
         0;  ///< INFOG(21): largest per-rank memory actually used (MB).
     int peak_mem_mb_total = 0;  ///< INFOG(22): total memory actually used (MB).

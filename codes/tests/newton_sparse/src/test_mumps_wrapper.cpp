@@ -25,6 +25,7 @@
 #include <mpi.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -317,6 +318,35 @@ void check_retry_ladder(MumpsOptions base, std::string const& label) {
               std::to_string(status.size()) + " succeeds");
 }
 
+/// Block low-rank factors (MumpsOptions::blr_tolerance) are approximate: the solve must succeed with the
+/// relaxed residual check of a preconditioner, the reported compressed size must not exceed the full-rank one,
+/// and the retry ladder must fall back to full-rank factors.
+void check_blr(MumpsOptions options, std::string const& label) {
+    options.verbosity = 1;
+    options.blr_tolerance = 1e-8;
+    options.residual_tolerance = 1e-6;
+    Matrix const a = make_matrix(6, 40, 3, 41, false);
+    int const n = static_cast<int>(a.size());
+    std::vector<double> x_true(n, 1.);
+    std::vector<double> const b = multiply(a, x_true);
+    std::vector<double> x = b;
+    SparseTriplets local = local_columns(a);
+    MumpsSolver solver(MPI_COMM_WORLD, options);
+    int const status = solver.solve(n, local, x);
+    check(status == 0, label + ": solve status " + std::to_string(status));
+    MumpsStats const& s = solver.stats();
+    check(s.relative_residual >= 0. && s.relative_residual <= 1e-6,
+          label + ": relative residual " + sci(s.relative_residual));
+    check(s.compressed_factor_entries > 0 && s.compressed_factor_entries <= s.factor_entries,
+          label + ": " + std::to_string(s.compressed_factor_entries) + " of " +
+              std::to_string(s.factor_entries) + " factor entries stored");
+    std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(options);
+    bool full_rank_retries = ladder.size() > 1;
+    for (std::size_t k = 1; k < ladder.size(); ++k)
+        full_rank_retries = full_rank_retries && ladder[k].options.blr_tolerance == 0.;
+    check(full_rank_retries, label + ": the retries use full-rank factors");
+}
+
 void run_singular(MumpsOptions options, std::string const& label) {
     options.verbosity = 0;
     MumpsSolver solver(MPI_COMM_WORLD, options);
@@ -373,6 +403,16 @@ int main(int argc, char** argv) {
         matched_parallel.parallel_analysis_min_n = 0;
         run_case(matched_parallel, "distributed+matching/ParMETIS");
     }
+    // Out-of-core factors (exact): files in $TMPDIR (or /tmp), removed by MUMPS at JOB = -2.
+    MumpsOptions out_of_core = centralized;
+    char const* tmpdir = std::getenv("TMPDIR");
+    out_of_core.ooc_dir = tmpdir != nullptr && tmpdir[0] != 0 ? tmpdir : "/tmp";
+    run_case(out_of_core, "centralized/METIS out-of-core");
+    MumpsOptions out_of_core_distributed = distributed;
+    out_of_core_distributed.ooc_dir = out_of_core.ooc_dir;
+    run_case(out_of_core_distributed, "distributed/METIS out-of-core");
+    check_blr(centralized, "centralized BLR 1e-8");
+    check_blr(distributed, "distributed BLR 1e-8");
     check_distribution_independence(centralized,
                                     "centralized distribution independence");
     check_residual_rejection(centralized, "centralized residual check");

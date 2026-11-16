@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <limits>
@@ -491,7 +492,35 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		MPI_Bcast(&mode, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		input_mode = mode;
 	}
+	// KADATH_MUMPS_BLR=<eps>: block low-rank factors at relative accuracy eps (MumpsOptions::blr_tolerance), only
+	// for the Newton-Krylov preconditioner, whose step GMRES finishes with the true J v.
+	// KADATH_MUMPS_OOC=<dir>: out-of-core factors in <dir> (MumpsOptions::ooc_dir; node-local disk preferred).
+	static bool env_read = false;
+	static double blr_tolerance = 0.;
+	static std::string ooc_dir;
+	if (!env_read) {
+		char buffer[1024] = {0};
+		if (rank == 0) {
+			char const* blr = std::getenv("KADATH_MUMPS_BLR");
+			blr_tolerance = blr ? std::atof(blr) : 0.;
+			char const* ooc = std::getenv("KADATH_MUMPS_OOC");
+			if (ooc)
+				std::snprintf(buffer, sizeof buffer, "%s", ooc);
+			if (blr_tolerance > 0.)
+				std::cout << "MUMPS: block low-rank factors at tolerance " << blr_tolerance
+				          << " for the Newton-Krylov preconditioner" << std::endl;
+			if (buffer[0] != 0)
+				std::cout << "MUMPS: out-of-core factors in " << buffer << std::endl;
+		}
+		MPI_Bcast(&blr_tolerance, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(buffer, sizeof buffer, MPI_CHAR, 0, MPI_COMM_WORLD);
+		ooc_dir = buffer;
+		env_read = true;
+	}
 	MumpsOptions base_options;
+	base_options.ooc_dir = ooc_dir;
+	if (preconditioner)
+		base_options.blr_tolerance = blr_tolerance;
 	if (input_mode == 1) {
 		base_options.centralized = false;
 		base_options.matching_entries = 16;
@@ -536,7 +565,10 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	if (status == 0 && rank == 0) {
 		MumpsStats const& s = solver->stats();
 		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / (1.0 * n * n) << " % of dense), factors = "
-		          << s.factor_entries << ", memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total
+		          << s.factor_entries;
+		if (s.compressed_factor_entries != s.factor_entries)
+			std::cout << " (" << s.compressed_factor_entries << " stored with BLR)";
+		std::cout << ", memory max/total = " << s.peak_mem_mb_max << " / " << s.peak_mem_mb_total
 		          << " MB, relative residual = " << s.relative_residual << ", pivots delayed = " << s.delayed_pivots
 		          << std::endl;
 		std::cout << "Inverting the matrix: " << s.time_gather + s.time_matching + s.time_analysis + s.time_factor_solve
