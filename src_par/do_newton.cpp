@@ -394,15 +394,21 @@ void report_memory() {
 	static MPI_Comm node = MPI_COMM_NULL;
 	if (node == MPI_COMM_NULL)
 		MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &node);
-	long node_kb = 0, rank_max_kb = 0, node_max_kb = 0, total_kb = 0;
+	int rank, nproc;
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	MPI_Comm_size (MPI_COMM_WORLD, &nproc);
+	long node_kb = 0, rank_max_kb = 0, node_max_kb = 0, total_kb = 0, other_max_kb = 0;
+	long const other_kb = rank == 0 ? 0 : hwm_kb;
 	MPI_Allreduce(&hwm_kb, &node_kb, 1, MPI_LONG, MPI_SUM, node);
 	MPI_Reduce(&hwm_kb, &rank_max_kb, 1, MPI_LONG, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&other_kb, &other_max_kb, 1, MPI_LONG, MPI_MAX, 0, MPI_COMM_WORLD);
 	MPI_Reduce(&node_kb, &node_max_kb, 1, MPI_LONG, MPI_MAX, 0, MPI_COMM_WORLD);
 	MPI_Reduce(&hwm_kb, &total_kb, 1, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
-	int rank;
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+	// Rank 0 gathers the matrix and runs the sequential analysis, so it is reported apart from the others.
 	if (rank == 0)
-		std::cout << "Memory high-water mark (VmHWM): max " << rank_max_kb / 1024 << " MB per rank, max "
+		std::cout << "Memory high-water mark (VmHWM): max " << rank_max_kb / 1024 << " MB per rank, rank 0 "
+		          << hwm_kb / 1024 << " MB, other ranks max " << other_max_kb / 1024 << " / mean "
+		          << (nproc > 1 ? (total_kb - hwm_kb) / (nproc - 1) / 1024 : 0) << " MB, max "
 		          << node_max_kb / 1024. / 1024. << " GB per node, total " << total_kb / 1024. / 1024. << " GB"
 		          << std::endl;
 }
@@ -425,6 +431,28 @@ constexpr double kEtaMax = 1e-3;
 /// The preconditioner is factored from the Jacobian without entries below this fraction of their row and column
 /// maximum (about 75 % of the entries); the exact step is then finished by GMRES with the true J v.
 constexpr double kPreconditionerDrop = 1e-13;
+
+/// kPreconditionerDrop, or KADATH_KRYLOV_DROP if set (experiments with larger drop tolerances: fewer entries for
+/// rank 0 to gather and order, more GMRES iterations); read on rank 0 once and broadcast. Collective.
+double preconditioner_drop() {
+	static double drop = -1.;
+	if (drop < 0.) {
+		int rank;
+		MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+		double value = kPreconditionerDrop;
+		if (rank == 0) {
+			char const* env = std::getenv("KADATH_KRYLOV_DROP");
+			if (env != nullptr && std::atof(env) > 0.) {
+				value = std::atof(env);
+				std::cout << "Newton-Krylov: preconditioner drop tolerance " << value << " (KADATH_KRYLOV_DROP)"
+				          << std::endl;
+			}
+		}
+		MPI_Bcast(&value, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		drop = value;
+	}
+	return drop;
+}
 constexpr double kExactStepTolerance = 1e-10;  ///< GMRES tolerance of that exact step.
 /// MUMPS residual check of the dropped factors: GMRES with the true J v finishes the step, so a slightly
 /// inaccurate preconditioner must not send MUMPS down the retry ladder.
@@ -772,7 +800,7 @@ Array<double> newton_update_krylov(System_of_eqs& syst, Array<double> const& sec
 	if (rank == 0)
 		std::cout << "Newton-Krylov: exact sparse Newton step, new preconditioner (" << reason << ")" << std::endl;
 	std::vector<double> row_max;
-	int status = sparse_newton_step(syst, second, x, st.preconditioner, kPreconditionerDrop, &row_max);
+	int status = sparse_newton_step(syst, second, x, st.preconditioner, preconditioner_drop(), &row_max);
 	if (status == 0) {
 		// New row scaling from this Jacobian (rows without entries keep 1).
 		st.row_scale.assign(n, 1.);
