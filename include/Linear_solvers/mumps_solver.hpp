@@ -94,6 +94,9 @@ struct MumpsOptions {
     int matching_growth = 0;
     /// Reuse the matching and potentials of the previous sampling round (only the unmatched columns are searched).
     bool matching_warm_start = true;
+    /// Diagnostics only: domain of every row / column (e.g. System_of_eqs::condition_domains / unknown_domains); a
+    /// failed sampling round then reports its unmatched rows and columns per domain. Empty = totals only.
+    std::vector<int> row_domains, col_domains;
     /// CNTL(7) of the block low-rank factorization (ICNTL(35) = 2): off-diagonal blocks of the fronts are
     /// compressed to this relative accuracy, which cuts factorization flops and factor memory on large 3-D-like
     /// fronts. 0 = full-rank factors. The factors then belong to a perturbed matrix, so only preconditioners

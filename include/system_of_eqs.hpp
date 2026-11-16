@@ -225,6 +225,12 @@ class System_of_eqs {
 	* Returns the number of unknowns.
 	*/
 	int get_nbr_unknowns() const {return nbr_unknowns ;} ;
+	/// Domain of every unknown, in the order of the Jacobian columns (-2 for shape unknowns of variable domains,
+	/// -1 for the global, double unknowns).
+	std::vector<int> unknown_domains() const ;
+	/// Domain of every condition, in the order of the Jacobian rows (-1 for the integral equations). Valid once the
+	/// conditions are counted (after the first sec_member).
+	std::vector<int> condition_domains() const ;
 	/// Process-unique id of this system (see \c instance_id).
 	unsigned long get_instance_id() const {return instance_id ;} ;
 
@@ -1081,6 +1087,10 @@ class Equation : public MemoryMappable {
 	* @return the total number of discretized conditions.
 	*/
 	   int get_n_cond_tot() const {return n_cond_tot;} ;
+	/**
+	* @return the number of the domain where the equation is defined.
+	*/
+	   int get_dom() const {return ndom;} ;
 
 	/**
 	* Computes the terms involved in computing the residual of the equations.

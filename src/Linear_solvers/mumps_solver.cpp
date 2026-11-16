@@ -4,6 +4,7 @@
 #include "Linear_solvers/weighted_matching.hpp"
 
 #include <algorithm>
+#include <array>
 #include <climits>
 #include <cmath>
 #include <cstdio>
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <stdexcept>
 
 namespace Kadath {
@@ -127,7 +129,54 @@ struct MatchingSettings {
     bool warm_start = true;
     int max_rounds = 8;
     double max_fraction = 0.25;
+    std::vector<int> const* row_domains =
+        nullptr;  ///< diagnostics: domain of every row (may be null)
+    std::vector<int> const* col_domains =
+        nullptr;  ///< diagnostics: domain of every column (may be null)
 };
+
+/// Diagnostics of a failed sampling round (rank 0): the unmatched columns and rows of the partial matching
+/// (the true deficiency, unlike the columns reached by the failed searches), per domain if the domains are known.
+void report_unmatched(MatchingState const& state,
+                      std::vector<int> const* row_domains,
+                      std::vector<int> const* col_domains) {
+    int const n = static_cast<int>(state.row_of_col.size());
+    std::map<int, std::array<int, 4>>
+        per_domain;  // domain -> unmatched cols, cols, unmatched rows, rows
+    int free_cols = 0, free_rows = 0;
+    bool const cols_known = col_domains != nullptr &&
+                            static_cast<int>(col_domains->size()) == n;
+    bool const rows_known = row_domains != nullptr &&
+                            static_cast<int>(row_domains->size()) == n;
+    for (int j = 0; j < n; ++j) {
+        bool const free = state.row_of_col[j] < 0;
+        free_cols += free;
+        if (cols_known) {
+            auto& d = per_domain[(*col_domains)[j]];
+            d[0] += free;
+            ++d[1];
+        }
+    }
+    for (int i = 0; i < n; ++i) {
+        bool const free = state.col_of_row[i] < 0;
+        free_rows += free;
+        if (rows_known) {
+            auto& d = per_domain[(*row_domains)[i]];
+            d[2] += free;
+            ++d[3];
+        }
+    }
+    std::cout << "MUMPS: matching deficiency: " << free_cols
+              << " unmatched columns, " << free_rows << " unmatched rows";
+    if (!per_domain.empty()) {
+        std::cout << "; per domain (unmatched/total columns, rows):";
+        for (auto const& [dom, c] : per_domain)
+            if (c[0] > 0 || c[2] > 0)
+                std::cout << " d" << dom << " " << c[0] << "/" << c[1] << " c, "
+                          << c[2] << "/" << c[3] << " r;";
+    }
+    std::cout << std::endl;
+}
 
 /// One candidate of a row's top-k list: key = |a_ij| / max_k |a_kj| (the matching prefers large keys).
 struct RowSlot {
@@ -340,14 +389,11 @@ std::vector<int> matching_permutation(int n,
                 row[at] = global.rows[k] - 1;
                 val[at] = global.values[k];
             }
+            if (!m.warm_start)
+                state =
+                    MatchingState{};  // cold start; the state still receives the partial matching
             std::vector<int> const row_of_col =
-                max_product_matching(n,
-                                     ptr,
-                                     row,
-                                     val,
-                                     &stuck,
-                                     m.warm_start ? &state : nullptr,
-                                     &colmax);
+                max_product_matching(n, ptr, row, val, &stuck, &state, &colmax);
             found = row_of_col.empty() ? 0 : 1;
             std::cout << "MUMPS: matching round " << round << ": " << sent
                       << " entries ("
@@ -360,6 +406,8 @@ std::vector<int> matching_permutation(int n,
             if (found)
                 for (int j = 0; j < n; ++j)
                     perm[row_of_col[j]] = j + 1;
+            else
+                report_unmatched(state, m.row_domains, m.col_domains);
         }
         MPI_Bcast(&found, 1, MPI_INT, 0, comm);
         if (found) {
@@ -466,6 +514,8 @@ int MumpsSolver::solve(int n,
         // With growth there is no fraction cap: continuing never needs more memory on rank 0 than the fallback
         // (gather everything for MUMPS), and the doubling bounds the rounds. Mid-size FUKA matrices needed 30-35 %.
         settings.max_fraction = options_.matching_growth > 0 ? 1.0 : 0.25;
+        settings.row_domains = &options_.row_domains;
+        settings.col_domains = &options_.col_domains;
         col_perm_ = matching_permutation(n, local, settings, comm_);
         stats_.time_matching = MPI_Wtime() - start;
         if (col_perm_.empty())

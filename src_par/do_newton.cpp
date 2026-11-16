@@ -564,6 +564,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		env_read = true;
 	}
 	MumpsOptions base_options;
+	base_options.row_domains = syst.condition_domains();
+	base_options.col_domains = syst.unknown_domains();
 	base_options.out_of_core = out_of_core;
 	base_options.ooc_dir = ooc_dir;
 	if (preconditioner)

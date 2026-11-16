@@ -437,6 +437,24 @@ void System_of_eqs::add_var (const char*nom, Tensor& tt) {
 	    nbr_unknowns += espace.get_domain(dd)->nbr_unknowns (tt, dd) ;
 }
 
+std::vector<int> System_of_eqs::unknown_domains () const {
+	// Order of xx_to_vars_variable_domains + xx_to_vars: shape unknowns of variable domains (-2), the double
+	// unknowns (-1), then every field domain by domain.
+	std::vector<int> domains (espace.nbr_unknowns_from_variable_domains(), -2) ;
+	domains.insert(domains.end(), nvar_double, -1) ;
+	for (int i=0 ; i<nvar ; i++)
+	  for (int dd=dom_min ; dd<=dom_max ; dd++)
+	    domains.insert(domains.end(), espace.get_domain(dd)->nbr_unknowns(*var[i], dd), dd) ;
+	return domains ;
+}
+
+std::vector<int> System_of_eqs::condition_domains () const {
+	std::vector<int> domains (neq_int, -1) ;
+	for (int i=0 ; i<neq ; i++)
+	  domains.insert(domains.end(), eq[i]->get_n_cond_tot(), eq[i]->get_dom()) ;
+	return domains ;
+}
+
 // Add a  constant
 void System_of_eqs::add_cst (const char*nom, const Tensor& so) {
 
