@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "FUKA_Solvers/BH_XCTS/BH_XCTS_driver.hpp"
 #include "FUKA_Solvers/utilities/solver/solver_startup.hpp"
-#include "Solvers/bh_3d_xcts/bh_3d_xcts_driver.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
 #include "mpi.h"
 
@@ -81,17 +81,13 @@ int main(int argc, char** argv) {
         auto seq = find_sequence(tree, MBCO_PARAMS, "bh");
 
         if (!seq.is_set() && !bconfig.control(CONTROLS::SEQUENCES))
-            int err =
-                bh_3d_xcts_driver(bconfig, resolution, InitSolver::outputdir);
+            BH_XCTS_driver(bconfig, resolution, InitSolver::outputdir);
         else {
 
             auto [branch_name, key, val] = find_leaf(tree, "N");
             if (!key.empty())
                 seq.set_N(std::stoi(val));
-            bh_3d_xcts_sequence(bconfig,
-                                seq,
-                                resolution,
-                                InitSolver::outputdir);
+            BH_XCTS_sequence(bconfig, seq, resolution, InitSolver::outputdir);
         }
     }
 

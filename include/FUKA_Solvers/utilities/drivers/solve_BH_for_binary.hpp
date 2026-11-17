@@ -1,6 +1,6 @@
 #pragma once
+#include "FUKA_Solvers/BH_XCTS/BH_XCTS_driver.hpp"
 #include "FUKA_Solvers/utilities/solver/fuka_path_tools.hpp"
-#include "Solvers/bh_3d_xcts/bh_3d_xcts_driver.hpp"
 
 namespace Kadath::FUKA_Solvers {
 template <typename config_t>
@@ -41,11 +41,7 @@ std::string solve_BH_for_binary(config_t& bconfig, const NODES bco) {
     bhconfig(BCO_PARAMS::NSHELLS) =
         (bconfig.control(CONTROLS::CO_USE_SHELLS)) ? nshells : 0;
 
-    int err = bh_3d_xcts_binary_boost_driver(bhconfig,
-                                             resolution,
-                                             output_path,
-                                             bconfig,
-                                             bco);
+    BH_XCTS_binary_boost_driver(bhconfig, resolution, output_path, bconfig);
     MPI_Barrier(MPI_COMM_WORLD);
 
     // update binary parameters

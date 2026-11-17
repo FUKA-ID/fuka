@@ -1,4 +1,7 @@
 #pragma once
+/// \file
+/// \deprecated Superseded by FUKA_Solvers/BH_XCTS; kept until the remaining
+/// users (old binary solvers) are ported, then removed.
 #include "FUKA_Solvers/BH_XCTS/utilities/BH_XCTS_setup.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
 #include "Solvers/sequences/sequence_utilities.hpp"
