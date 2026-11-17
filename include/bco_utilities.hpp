@@ -1133,6 +1133,12 @@ void print_constant_space_resolution(space_t const& space) {
     std::cout << "\n";
 };
 
+/// Approved spectral orders, reasonable to use with FFTW3.
+inline std::vector<int> const& approved_resolutions() {
+    static std::vector<int> const ress{9, 11, 13, 17, 21, 25, 33};
+    return ress;
+}
+
 /**
  * @brief Determine the next resolution that is reasonable to use with FFTW3
  *
@@ -1140,7 +1146,7 @@ void print_constant_space_resolution(space_t const& space) {
  * @return int Next resolution
  */
 inline int next_resolution(int const res) {
-    std::vector<int> ress{9, 11, 13, 17, 21, 25, 33};
+    auto const& ress = approved_resolutions();
     auto res_it = std::find_if(ress.begin(), ress.end(), [&res](auto& n) {
         return n == res;
     });

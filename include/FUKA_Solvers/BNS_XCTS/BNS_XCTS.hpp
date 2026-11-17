@@ -101,7 +101,7 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
    public:
     int do_newton() override;
     void checkpoint(bool termination_chkpt = false) const;
-    void print_diagnostics(const int ite, const double conv) override;
+    void print_diagnostics(const int ite, const double conv) const override;
     std::string converged_filename(const std::string stage) const override;
 
     bool solution_exists() {
@@ -165,7 +165,7 @@ struct BNS_XCTS : public BNS_XCTS_base {
     void setup_hydrostatic_equilibrium_stage();
 
    public:
-    void setup_syst() {
+    void setup_syst() override {
         if (solver_stage == STAGES::PRE || solver_stage == STAGES::TOTAL_BC ||
             solver_stage == STAGES::ECC_RED) {
             setup_hydro_rescaling_syst();

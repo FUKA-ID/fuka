@@ -1,8 +1,10 @@
 #pragma once
+#include <algorithm>
 #include <string>
 #include "Configurator/config_binary.hpp"
 #include "Configurator/configurator_boost.hpp"
 #include "EOS/FUKA_EOS_Utilities.hh"
+#include "bco_utilities.hpp"
 
 using namespace Kadath::FUKA_Config;
 
@@ -63,6 +65,24 @@ void check_max_iter_exceeded(solver_t const& solver,
  * @param syst System of equations
  * @param p Parameter container (unused, but required by add_ope)
  */
+/**
+ * @brief Next order of a resolution sequence: the next approved order
+ * (bco_utils::next_resolution), or +2 for an order off the approved list,
+ * never beyond the final order.
+ *
+ * @param res current order
+ * @param final_res final order of the sequence
+ */
+inline int next_resolution_step(int const res, int const final_res) {
+    auto const& ress = ::Kadath::bco_utils::approved_resolutions();
+    bool const approved = std::find(ress.begin(), ress.end(), res) !=
+                          ress.end();
+    int const next = (approved && res < ress.back())
+                         ? ::Kadath::bco_utils::next_resolution(res)
+                         : res + 2;
+    return std::min(next, final_res);
+}
+
 template <class eos_t>
 inline void set_eos_ope(System_of_eqs& syst, Param& p) {
     syst.add_ope("eps", &EOS<eos_t, EPSILON>::action, &p);

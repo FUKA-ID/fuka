@@ -2,7 +2,8 @@
 #include "bco_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
-inline void BNS_XCTS_base::print_diagnostics(const int ite, const double conv) {
+inline void BNS_XCTS_base::print_diagnostics(const int ite,
+                                             const double conv) const {
     std::ios_base::fmtflags f(std::cout.flags());
     using namespace ::Kadath::bco_utils;
 

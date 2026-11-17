@@ -100,7 +100,7 @@ struct FUKA_Solver_base {
     virtual void load_solution_from_file() = 0;
     virtual void initialize_support_containers() = 0;
     virtual void update_config_quantities() = 0;
-    virtual void print_diagnostics(const int ite, const double conv) = 0;
+    virtual void print_diagnostics(const int ite, const double conv) const = 0;
 
    public:
     virtual void reset_all_ptrs() = 0;
@@ -111,6 +111,7 @@ struct FUKA_Solver_base {
 
     // Solver methods
     virtual void syst_init() = 0;
+    virtual void setup_syst() = 0;
     virtual int do_newton() = 0;
 
    protected:
