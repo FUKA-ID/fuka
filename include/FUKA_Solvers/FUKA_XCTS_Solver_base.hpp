@@ -73,7 +73,7 @@ struct FUKA_XCTS_Solver_base : public FUKA_Solver_base {
     }
 
     /// Release the containers that refer to the space; the system goes first.
-    void reset_support_containers() {
+    virtual void reset_support_containers() {
         syst.reset(nullptr);
         basis.reset(nullptr);
         fmet.reset(nullptr);
@@ -86,6 +86,9 @@ struct FUKA_XCTS_Solver_base : public FUKA_Solver_base {
     virtual void update_coordinate_fields() {
         update_fields_co(*cfields, *coord_vectors, {}, 0., syst);
     }
+
+    /// Called after every Newton step, before the diagnostics and checkpoint.
+    virtual void post_newton_step() {}
 
     /// Whether a converged solution found on disk may replace the current one.
     virtual bool is_compatible_solution(base_config_t& /*old_config*/) {
@@ -212,6 +215,7 @@ struct FUKA_XCTS_Solver_base : public FUKA_Solver_base {
             endloop = syst->do_newton(bconfig->seq_setting(PREC), conv);
 
             update_config_quantities();
+            post_newton_step();
 
             std::stringstream ss;
             ss << stagename << "_ckpt_" << ite - 1;

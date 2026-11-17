@@ -71,16 +71,14 @@ struct launch_BHNS_solver {
             int exit_status = EXIT_SUCCESS;
             do {
                 // initial solution
-                solver.setup_syst();
-                solver.do_newton();
+                solver.solve();
 
                 if (!ignore_resinc) {
                     // Make sure final solution uses optimal domain decomposition
                     solver.regrid();
 
                     // resolve at current resolution
-                    solver.setup_syst();
-                    solver.do_newton();
+                    solver.solve();
                 }
 
                 // Obtain final resolution for the desired
@@ -94,8 +92,7 @@ struct launch_BHNS_solver {
                     solver.regrid();
 
                     // initial solution
-                    solver.setup_syst();
-                    exit_status = solver.do_newton();
+                    exit_status = solver.solve();
                 }
             } while (!ignore_seq);  // && solver.increment_seq());
             return exit_status;

@@ -1,46 +1,20 @@
 
 namespace Kadath::FUKA_Solvers {
-BNS_XCTS_base::BNS_XCTS_base()
-    : FUKA_Solver_base(),
-      bconfig(nullptr),
-      basis(nullptr),
-      fmet(nullptr),
-      cfields(nullptr),
-      coord_vectors(nullptr),
-      syst(nullptr),
-      conformal_factor(nullptr),
-      lapse(nullptr),
-      shift(nullptr),
-      logh(nullptr),
-      logh_const(nullptr),
-      phi(nullptr),
+inline BNS_XCTS_base::BNS_XCTS_base(base_config_t* config_,
+                                    seq_t const& ns1_seq_,
+                                    seq_t const& ns2_seq_,
+                                    res_seq_t const& res_,
+                                    std::string outputdir_,
+                                    int const rank_)
+    : solver_base_t(config_, outputdir_, rank_),
+      ns1_seq(new seq_t(ns1_seq_)),
+      ns2_seq(new seq_t(ns2_seq_)),
+      resolution(new res_seq_t(res_)),
       xc1(0),
       xc2(0),
       xo(0),
       H_scale1(0),
-      H_scale2(0) {};
-
-BNS_XCTS_base::BNS_XCTS_base(BNS_XCTS_base::base_config_t* config_,
-                             seq_t const& ns1_seq_,
-                             seq_t const& ns2_seq_,
-                             res_seq_t const& res_,
-                             std::string outputdir_,
-                             int const rank_)
-    : BNS_XCTS_base() {
-    this->rank = rank_;
-    this->outputdir = outputdir_;
-
-    bconfig.reset(config_);
-
-    std::array<bool, NUM_STAGES>& stage_enabled = bconfig->return_stages();
-    auto [last_stage_, last_stage_idx_] =
-        get_last_enabled(MSTAGE, stage_enabled);
-    last_stage_idx = last_stage_idx_;
-
-    ns1_seq.reset(new seq_t(ns1_seq_));
-    ns2_seq.reset(new seq_t(ns2_seq_));
-    resolution.reset(new res_seq_t(res_));
-
+      H_scale2(0) {
     if (rank == 0) {
         cout << *ns1_seq << endl;
         cout << *ns2_seq << endl;
@@ -48,53 +22,45 @@ BNS_XCTS_base::BNS_XCTS_base(BNS_XCTS_base::base_config_t* config_,
     }
 }
 
-inline void BNS_XCTS_base::reset_base_ptrs() {
-    // Fields
+inline void BNS_XCTS_base::reset_all_ptrs() {
+    reset_support_containers();
+
     conformal_factor.reset(nullptr);
     lapse.reset(nullptr);
     shift.reset(nullptr);
     logh.reset(nullptr);
     phi.reset(nullptr);
 
-    logh_const.reset(nullptr);
-
-    // Containers
-    basis.reset(nullptr);
-    fmet.reset(nullptr);
-    syst.reset(nullptr);
-    cfields.reset(nullptr);
-    coord_vectors.reset(nullptr);
-
-    // Space
     space.reset(nullptr);
 }
 
-/**
- * @brief Consistent interface for writing a checkpoint
- *
- * @param termination_chkpt Toggle writing to stdout for termination
- */
-inline void BNS_XCTS_base::checkpoint(bool termination_chkpt) const {
-    // Backup activated stages
-    auto const final_stages{bconfig->return_stages()};
+inline void BNS_XCTS_base::reset_support_containers() {
+    // refers to the space, rebuilt by the hydro-rescaling setup
+    logh_const.reset(nullptr);
+    solver_base_t::reset_support_containers();
+}
 
-    // Clear stages and only set the current stage as active
-    auto& stages = bconfig->return_stages();
-    stages.fill(false);
-    stages[this->solver_stage] = true;
+inline void BNS_XCTS_base::post_newton_step() {
+    // overwrite logh with the scaled version for later use and output
+    if (logh_const)
+        *logh = syst->give_val_def("H");
+}
 
-    // Save to file
-    save_solution_to_file();
+inline void BNS_XCTS_base::update_coordinate_fields() {
+    Kadath::update_fields(*cfields,
+                          *coord_vectors,
+                          {},
+                          xo,
+                          xc1,
+                          xc2,
+                          syst.get());
+}
 
-    // Reset to original stages
-    stages = final_stages;
-
-    if (termination_chkpt) {
-        std::stringstream ss;
-        ss << "***Writing early termination chkpt "
-           << bconfig->config_filename() << "***\n";
-        throw std::runtime_error(ss.str().c_str());
-    }
+inline bool BNS_XCTS_base::is_compatible_solution(base_config_t& old_config) {
+    return bconfig->set(BCO_PARAMS::NSHELLS, NODES::BCO1) ==
+               old_config.set(BCO_PARAMS::NSHELLS, NODES::BCO1) &&
+           bconfig->set(BCO_PARAMS::NSHELLS, NODES::BCO2) ==
+               old_config.set(BCO_PARAMS::NSHELLS, NODES::BCO2);
 }
 
 inline void BNS_XCTS_base::initialize_support_containers() {

@@ -12,7 +12,7 @@
  * https://arxiv.org/abs/2103.09911
  */
 #pragma once
-#include "FUKA_Solvers/FUKA_Solver_base.hpp"
+#include "FUKA_Solvers/FUKA_XCTS_Solver_base.hpp"
 #include "Solvers/sequences/bco_sequence.hpp"
 #include "kadath_bin_ns.hpp"
 
@@ -26,28 +26,17 @@ using namespace ::Kadath::FUKA_Config;
 using seq_t = bco_sequence<BCO_PARAMS, NODES>;
 using res_seq_t = Parameter_sequence<BIN_PARAMS>;
 
-struct BNS_XCTS_base : public FUKA_Solver_base {
-    using base_space_t = Kadath::Space_bin_ns;
-    using base_config_t = kadath_config_boost<BIN_INFO>;
-
-    ptr_data_member(base_space_t, space, unique);
-    ptr_data_member(base_config_t, bconfig, unique);
-
-    using cfgen_t = CoordFields<base_space_t>;
-    using cfary_t = std::array<std::optional<Vector>, NUM_VECTORS>;
+struct BNS_XCTS_base
+    : public FUKA_XCTS_Solver_base<Kadath::Space_bin_ns,
+                                   kadath_config_boost<BIN_INFO>> {
+    using solver_base_t = FUKA_XCTS_Solver_base<Kadath::Space_bin_ns,
+                                                kadath_config_boost<BIN_INFO>>;
 
    protected:
     // EOS Parameters - Perhaps this should be a container?
     internal_variable(double, h_cut);
     internal_variable(std::string, eos_file);
     internal_variable(std::string, eos_type);
-
-    // Support containers
-    ptr_data_member(Base_tensor, basis, unique);
-    ptr_data_member(Metric_flat, fmet, unique);
-    ptr_data_member(System_of_eqs, syst, unique);
-    ptr_data_member(cfgen_t, cfields, unique);
-    ptr_data_member(cfary_t, coord_vectors, unique);
 
     // Sequence containers
     ptr_data_member(seq_t const, ns1_seq, unique);
@@ -61,6 +50,7 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
     ptr_data_member(Scalar, logh, unique);
     ptr_data_member(Scalar, phi, unique);
 
+    /// Unscaled enthalpy of the hydro-rescaling stages (system constant).
     ptr_data_member(Scalar, logh_const, unique);
 
     // Domain centers
@@ -70,80 +60,45 @@ struct BNS_XCTS_base : public FUKA_Solver_base {
     internal_variable(double, H_scale1);
     internal_variable(double, H_scale2);
 
-    virtual ~BNS_XCTS_base() { bconfig.release(); };
-
-    BNS_XCTS_base();
-
-    BNS_XCTS_base(BNS_XCTS_base::base_config_t* config_,
+    BNS_XCTS_base(base_config_t* config_,
                   seq_t const& ns1_seq_,
                   seq_t const& ns2_seq_,
                   res_seq_t const& res_,
                   std::string outputdir_,
                   int const rank_);
 
-    bool increment_resolution() override;
-
-    void regrid() override;
-    void syst_init() override;
-
-    void reset_all_ptrs() override { reset_base_ptrs(); }
-
-   protected:
     // Initialization Methods
     void initialize_support_containers() override;
+    void reset_support_containers() override;
 
     // I/O Methods
     void save_solution_to_file() const override;
     void load_solution_from_file() override;
     void update_config_quantities() override {};
-    void reset_base_ptrs();
+    void post_newton_step() override;
+    void update_coordinate_fields() override;
+    bool is_compatible_solution(base_config_t& old_config) override;
 
    public:
-    int do_newton() override;
-    void checkpoint(bool termination_chkpt = false) const;
+    /// Members a revert needs (Solution_snapshot).
+    static constexpr auto snapshot_members() {
+        return std::make_tuple(&BNS_XCTS_base::space,
+                               &BNS_XCTS_base::bconfig,
+                               &BNS_XCTS_base::conformal_factor,
+                               &BNS_XCTS_base::lapse,
+                               &BNS_XCTS_base::shift,
+                               &BNS_XCTS_base::logh,
+                               &BNS_XCTS_base::phi);
+    }
+
+    bool increment_resolution() override;
+    void regrid() override;
+    void write_regridded_solution(base_config_t& target) const override;
+    void syst_init() override;
+    void reset_all_ptrs() override;
+
     void print_diagnostics(const int ite, const double conv) const override;
     std::string converged_filename(const std::string stage) const override;
-
-    bool solution_exists() {
-        bool exists = false;
-        std::string prev_name{converged_filename(stagename)};
-        std::string prev_abs{bconfig->config_outputdir() + prev_name};
-
-        auto check_and_update_config = [&](auto p) {
-            exists = true;
-            base_config_t old_solution(p + ".info");
-
-            if (bconfig->set(BCO_PARAMS::NSHELLS, NODES::BCO1) !=
-                    old_solution.set(BCO_PARAMS::NSHELLS, NODES::BCO1) ||
-                bconfig->set(BCO_PARAMS::NSHELLS, NODES::BCO2) !=
-                    old_solution.set(BCO_PARAMS::NSHELLS, NODES::BCO2))
-                return false;
-
-            // make sure we copy stages, controls, and settings over
-            for (auto idx = 0; idx < STAGES::NUM_STAGES; ++idx)
-                old_solution.set_stage(idx) = bconfig->set_stage(idx);
-            for (auto idx : CONTROLS_ARY)
-                old_solution.control(idx) = bconfig->control(idx);
-            for (auto idx = 0; idx < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++idx)
-                old_solution.seq_setting(idx) = bconfig->seq_setting(idx);
-
-            auto& stages = bconfig->return_stages();
-            auto [last_stage_name, last_stage_idx] =
-                get_last_enabled(MSTAGE, stages);
-            if (solver_stage != last_stage_idx)
-                // Deactivate current stage since we found solution
-                old_solution.set_stage(solver_stage) = false;
-            *bconfig = old_solution;
-            return exists;
-        };
-
-        /// Check based on current output directory
-        if (fs::exists(prev_abs + ".info") && fs::exists(prev_abs + ".dat")) {
-            exists = check_and_update_config(prev_abs);
-        }
-
-        return exists;
-    }
 };
 
 template <class eos_t>
@@ -182,6 +137,5 @@ struct BNS_XCTS : public BNS_XCTS_base {
 #include "stages/BNS_XCTS_hydro_rescaling.hpp"
 #include "stages/BNS_XCTS_hydrostatic_equilibrium.hpp"
 #include "utilities/BNS_XCTS_diagnostics.cpp"
-#include "utilities/BNS_XCTS_do_newton.cpp"
 #include "utilities/BNS_XCTS_regrid.cpp"
 #include "utilities/BNS_XCTS_syst_init.cpp"
