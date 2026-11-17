@@ -616,6 +616,10 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		if (matching[3] >= 0)
 			base_options.matching_warm_start = matching[3] != 0;
 	}
+	// The permutation of the last factorization seeds the matching of the next one with the same unknowns.
+	static std::vector<int> last_permutation;
+	if (static_cast<int>(last_permutation.size()) == n)
+		base_options.matching_hint = last_permutation;
 	std::vector<MumpsAttempt> const ladder = mumps_retry_ladder(base_options);
 	int status = 0;
 	bool internal_ordering = false;  // after -51 every attempt uses AMF: the graph is the same for all of them
@@ -655,6 +659,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 		}
 	}
 
+	if (status == 0 && !solver->column_permutation().empty())
+		last_permutation = solver->column_permutation();
 	if (status == 0 && rank == 0) {
 		MumpsStats const& s = solver->stats();
 		std::cout << "MUMPS: nnz = " << s.nnz << " (" << 100. * s.nnz / (1.0 * n * n) << " % of dense), factors = "

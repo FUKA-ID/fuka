@@ -28,6 +28,9 @@
 * MUMPS out-of-core when memory is short: if the factors do not fit in memory they are written to disk
   (logged as `MUMPS: OUT-OF-CORE: insufficient memory ...`); `KADATH_MUMPS_OOC=off` stops with an error instead,
   `on` always uses the disk, `KADATH_MUMPS_OOC_DIR` sets the directory.
+* Refactorizations reuse the previous column permutation: the entries it matched join the first sample of the
+  wrapper's matching, so a perfect matching is usually found in the first round instead of after several rounds
+  of growing the sample (the matching took 60-70 % of the MUMPS time of the binaries before).
 * A diverging Newton iteration (non-finite residual, or one growing by more than 1e6 over the largest residual of
   the system) stops with a message instead of trying the MUMPS fallback configurations, which need more memory
   and cannot repair it.

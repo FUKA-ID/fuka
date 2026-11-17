@@ -91,11 +91,13 @@ Newton step with a sparse Jacobian; nothing needs to be configured. `KADATH_LINS
 
 The three are alternatives for the same Newton iteration and give the same solution to the requested
 `solver_precision`; only one is used per run (e.g. `export KADATH_LINSOLVE=mumps` before `mpirun`). Use the
-default unless a run fails to converge.
+default unless a run fails to converge. A Newton iteration that diverges (the residual becomes non-finite or grows by more
+than a factor 1e6) stops with a message instead of trying the MUMPS fallback configurations, which cannot repair
+it; check the initial data and configuration in that case.
 
 The Newton solvers keep the Jacobian distributed for MUMPS: rank 0 gathers only a sample of large entries (about
 10 % of a large matrix) to compute the column permutation that puts large entries on the diagonal, instead of the
-whole matrix. `export KADATH_MUMPS_INPUT=centralized` gathers the whole matrix on rank 0 and lets MUMPS compute the
+whole matrix; later factorizations start from the previous permutation. `export KADATH_MUMPS_INPUT=centralized` gathers the whole matrix on rank 0 and lets MUMPS compute the
 permutation (the previous behaviour; same solutions, more memory on rank 0). Rank 0 still runs the MUMPS analysis
 of the whole sparsity pattern and needs the most memory of all ranks for the largest Jacobians: give it a node
 with free memory.

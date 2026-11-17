@@ -207,6 +207,52 @@ void run_case(MumpsOptions options, std::string const& label) {
                     label + " [fresh, same matrix]");
 }
 
+/// Matching hint (MumpsOptions::matching_hint): the permutation of a factorization seeds the sample of the next
+/// one. A slightly changed matrix (the next Newton Jacobian) then has a perfect matching in the first round, a
+/// stale hint (another matrix of the same size) or one of the wrong size changes nothing but the sample, and
+/// every solve stays exact.
+void check_matching_hint(MumpsOptions options, std::string const& label) {
+    options.verbosity = 1;
+    Matrix const a = make_matrix(6, 40, 3, 11, false);
+    Matrix next = a;  // same pattern, values changed by up to 1 %
+    std::mt19937 gen(7);
+    std::uniform_real_distribution<double> change(-0.01, 0.01);
+    for (auto& column : next)
+        for (auto& [i, v] : column)
+            v *= 1. + change(gen);
+
+    MumpsSolver first(MPI_COMM_WORLD, options);
+    solve_and_check(first, a, label + " [hint source]");
+    std::vector<int> const hint = first.column_permutation();
+    check(static_cast<int>(hint.size()) == static_cast<int>(a.size()), label + ": permutation of the first solve kept");
+
+    MumpsSolver cold(MPI_COMM_WORLD, options);
+    solve_and_check(cold, next, label + " [no hint]");
+    MumpsOptions hinted = options;
+    hinted.matching_hint = hint;
+    MumpsSolver warm(MPI_COMM_WORLD, hinted);
+    solve_and_check(warm, next, label + " [hint]");
+    int const cold_rounds = cold.stats().matching_rounds, warm_rounds = warm.stats().matching_rounds;
+    if (rank_ == 0)
+        std::cout << label << ": matching rounds without / with the hint: " << cold_rounds << " / " << warm_rounds
+                  << std::endl;
+    check(warm_rounds == 1 && warm_rounds <= cold_rounds,
+          label + ": with the hint a perfect matching in round " + std::to_string(warm_rounds) + " (without: " +
+              std::to_string(cold_rounds) + ")");
+
+    MumpsOptions stale = options;  // permutation of an unrelated matrix of the same size
+    MumpsSolver other(MPI_COMM_WORLD, options);
+    solve_and_check(other, make_matrix(6, 40, 3, 99, false), label + " [stale hint source]");
+    stale.matching_hint = other.column_permutation();
+    MumpsSolver with_stale(MPI_COMM_WORLD, stale);
+    solve_and_check(with_stale, next, label + " [stale hint]");
+    MumpsOptions wrong = options;
+    wrong.matching_hint = std::vector<int>(5, 1);
+    MumpsSolver with_wrong(MPI_COMM_WORLD, wrong);
+    solve_and_check(with_wrong, next, label + " [hint of the wrong size]");
+    check(with_wrong.stats().matching_rounds == cold_rounds, label + ": a hint of the wrong size is ignored");
+}
+
 /// Different column distributions hand MUMPS the same entries in a different order; solutions for different
 /// distributions, and repeated solves, must agree to roundoff (bit identity is not required); the measured
 /// differences are printed.
@@ -454,6 +500,10 @@ int main(int argc, char** argv) {
     minimal.matching_row_entries = 1;
     minimal.matching_growth = 1;
     run_case(minimal, "distributed+matching (1 per column, 1 per row, growth 1)/METIS");
+    MumpsOptions hinted = distributed;
+    hinted.matching_entries = 1;
+    hinted.matching_growth = 1;
+    check_matching_hint(hinted, "distributed+matching (1 per column, growth 1) with hint");
     // The fallback after INFOG(1) = -51 (graph too large for the 32-bit METIS): internal AMF ordering.
     run_case(with_internal_ordering(matched), "distributed+matching/AMF");
     run_case(with_internal_ordering(centralized), "centralized/AMF");

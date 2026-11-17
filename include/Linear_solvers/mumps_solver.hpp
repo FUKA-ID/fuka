@@ -76,13 +76,13 @@ struct MumpsOptions {
     /// Distributed input only: compute the column permutation of ICNTL(6) here (MUMPS applies it only to a
     /// matrix centralized on rank 0). Each rank keeps, of each of its columns, the matching_entries largest
     /// entries and the matching_entries largest relative to their row maxima; rank 0 gathers only those and
-    /// computes a maximum-product matching. If they hold no perfect matching, rank 0 also gathers all entries
-    /// of the columns its failed searches reached, for up to 8 rounds and 25 % of the matrix; then
-    /// kNoMatching is returned and the retry ladder gathers the matrix. 0 = no permutation: Kadath Jacobians
-    /// then need 7-25x larger factors and many delayed pivots.
-    /// Off by default: on FUKA binaries (2026-11-15, 80 ranks) the sampled entries never held a perfect
-    /// matching and the expansion gathered 64-91 % of the matrix on rank 0, so it saved no memory, and the
-    /// matching took longer than MUMPS's own analysis (runs 1.2-2.2x slower than centralized input).
+    /// computes a maximum-product matching. If they hold no perfect matching, the columns its failed searches
+    /// reached send more entries (matching_growth), for up to 8 rounds and 25 % of the matrix without growth
+    /// (16 rounds, no cap with growth); then kNoMatching is returned and the retry ladder gathers the matrix.
+    /// 0 = no permutation: Kadath Jacobians then need 7-25x larger factors and many delayed pivots.
+    /// 0 here; the Newton solvers use 16 with growth 4 (distributed input is their default): on the FUKA
+    /// binaries a perfect matching needs 8-27 % of the large matrices, and rank 0's peak is a third lower than
+    /// with centralized input.
     int matching_entries = 0;
     /// Distributed input with matching_entries > 0: also gather, of every row, the matching_row_entries entries
     /// with the largest |a_ij| / max_k |a_kj| over all ranks (one MPI reduction of n x k candidates), so every
@@ -94,6 +94,12 @@ struct MumpsOptions {
     int matching_growth = 0;
     /// Reuse the matching and potentials of the previous sampling round (only the unmatched columns are searched).
     bool matching_warm_start = true;
+    /// Distributed input with matching_entries > 0: column permutation of an earlier factorization of a matrix with
+    /// the same unknowns (MumpsSolver::column_permutation()). Its matched entries that are still non-zero join the
+    /// first sample, so a slowly changing Jacobian (the next refactorization of a Newton iteration) usually has a
+    /// perfect matching in the first round instead of growing the sample. The matching stays optimal on the
+    /// sample. Ignored unless it has n entries.
+    std::vector<int> matching_hint;
     /// Diagnostics only: domain of every row / column (e.g. System_of_eqs::condition_domains / unknown_domains); a
     /// failed sampling round then reports its unmatched rows and columns per domain. Empty = totals only.
     std::vector<int> row_domains, col_domains;
@@ -143,6 +149,8 @@ struct MumpsStats {
         0.;  ///< Seconds spent gathering triplets on rank 0 (centralized input).
     double time_matching =
         0.;  ///< Seconds for the column permutation of distributed input (pruning, gather, matching).
+    int matching_rounds =
+        0;  ///< Sampling rounds of that matching (1 = perfect in the first sample).
     double time_analysis = 0.;  ///< Seconds in JOB=1.
     double time_factor_solve =
         0.;  ///< Seconds in the successful JOB=5 (and failed attempts).
@@ -182,6 +190,10 @@ class MumpsSolver {
 
     /// True when the last solve() succeeded, so solve_factored() can be used.
     bool has_factors() const { return factored_; }
+
+    /// Column permutation of the last solve with the wrapper's matching (original column, 1-based, of permuted
+    /// column i: row i holds its matched entry); empty otherwise. Usable as MumpsOptions::matching_hint.
+    std::vector<int> const& column_permutation() const { return col_perm_; }
 
     MumpsStats const& stats() const { return stats_; }
 

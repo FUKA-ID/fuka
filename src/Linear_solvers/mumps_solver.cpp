@@ -175,6 +175,10 @@ struct MatchingSettings {
         nullptr;  ///< diagnostics: domain of every row (may be null)
     std::vector<int> const* col_domains =
         nullptr;  ///< diagnostics: domain of every column (may be null)
+    std::vector<int> const* hint =
+        nullptr;  ///< permutation of an earlier factorization (MumpsOptions::matching_hint; may be null)
+    int* rounds =
+        nullptr;  ///< receives the number of sampling rounds (may be null)
 };
 
 /// Diagnostics of a failed sampling round (rank 0): the unmatched columns and rows of the partial matching
@@ -258,7 +262,8 @@ void merge_row_slots(void* in, void* inout, int* len, MPI_Datatype*) {
 /// If the sample holds no perfect matching, rank 0 reports the columns its failed searches reached and those
 /// columns send more entries: their @p m.growth next-largest (doubled every round), or all of them if
 /// growth = 0. The matching of the previous round is reused if m.warm_start. At most m.max_rounds rounds while
-/// the gathered entries stay below m.max_fraction of the matrix.
+/// the gathered entries stay below m.max_fraction of the matrix. With m.hint (a permutation of an earlier
+/// factorization) the entries it matched join the first sample where they are still non-zero.
 /// Returns, on every rank, the original column (1-based) of permuted column i, so that row i holds a large
 /// entry on the diagonal; empty if no perfect matching was found. Collective.
 std::vector<int> matching_permutation(int n,
@@ -328,6 +333,30 @@ std::vector<int> matching_permutation(int n,
     for (int j = 0; j < n; ++j)
         if (col_end[j] > col_begin[j])
             select(j, m.per_column);
+
+    // Entries matched by an earlier factorization (MumpsOptions::matching_hint): in a Newton iteration the large
+    // entries move little between refactorizations, so these usually complete a perfect matching at once.
+    if (m.hint != nullptr && static_cast<int>(m.hint->size()) == n) {
+        std::vector<int> hinted_row(n, -1);
+        for (int i = 0; i < n; ++i) {
+            int const j = (*m.hint)[i] - 1;
+            if (j >= 0 && j < n)
+                hinted_row[j] = i;
+        }
+        long long present = 0;
+        for (int j = 0; j < n; ++j)
+            for (std::int64_t q = col_begin[j]; q < col_end[j]; ++q)
+                if (local.rows[order[q]] - 1 == hinted_row[j]) {
+                    if (keep[order[q]] == 0)
+                        keep[order[q]] = 1;
+                    ++present;
+                    break;
+                }
+        MPI_Allreduce(MPI_IN_PLACE, &present, 1, MPI_LONG_LONG, MPI_SUM, comm);
+        if (rank == 0)
+            std::cout << "MUMPS: matching hint: " << present << " of " << n
+                      << " previously matched entries present" << std::endl;
+    }
 
     // Per-row candidates over all ranks.
     if (m.per_row > 0) {
@@ -452,6 +481,8 @@ std::vector<int> matching_permutation(int n,
                 report_unmatched(state, m.row_domains, m.col_domains);
         }
         MPI_Bcast(&found, 1, MPI_INT, 0, comm);
+        if (m.rounds != nullptr)
+            *m.rounds = round + 1;
         if (found) {
             MPI_Bcast(perm.data(), n, MPI_INT, 0, comm);
             return perm;
@@ -558,6 +589,8 @@ int MumpsSolver::solve(int n,
         settings.max_fraction = options_.matching_growth > 0 ? 1.0 : 0.25;
         settings.row_domains = &options_.row_domains;
         settings.col_domains = &options_.col_domains;
+        settings.hint = &options_.matching_hint;
+        settings.rounds = &stats_.matching_rounds;
         col_perm_ = matching_permutation(n, local, settings, comm_);
         stats_.time_matching = MPI_Wtime() - start;
         if (col_perm_.empty())
