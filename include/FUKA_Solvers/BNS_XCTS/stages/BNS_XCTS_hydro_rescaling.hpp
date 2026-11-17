@@ -59,27 +59,13 @@ void BNS_XCTS<eos_t>::setup_hydro_rescaling_syst() {
                       << std::string(42, '#') << std::endl;
         }
     }
-    if (solver_stage == STAGES::ECC_RED) {
-        // determine whether to use PN estimates of the orbital frequency and adot
-        // in case of the eccentricity stage
-        if (std::isnan(bconfig->set(BIN_PARAMS::ADOT)) ||
-            std::isnan(bconfig->set(BIN_PARAMS::ECC_OMEGA)) ||
-            bconfig->control(CONTROLS::USE_PN)) {
-            ::Kadath::bco_utils::KadathPNOrbitalParams(
-                *bconfig,
-                (*bconfig)(BCO_PARAMS::MADM, NODES::BCO1),
-                (*bconfig)(BCO_PARAMS::MADM, NODES::BCO2));
-
-            if (rank == 0)
-                std::cout << "### Using PN estimate for adot and omega! ###"
-                          << std::endl;
-            bconfig->set(BIN_PARAMS::ECC_OMEGA) =
-                (*bconfig)(BIN_PARAMS::GOMEGA);
-        } else {
-            bconfig->set(BIN_PARAMS::GOMEGA) =
-                (*bconfig)(BIN_PARAMS::ECC_OMEGA);
-        }
-    }
+    if (solver_stage == STAGES::ECC_RED)
+        binary_syst::set_ecc_red_orbit(*bconfig,
+                                       rank,
+                                       (*bconfig)(BCO_PARAMS::MADM,
+                                                  NODES::BCO1),
+                                       (*bconfig)(BCO_PARAMS::MADM,
+                                                  NODES::BCO2));
 
     // setup background position vector field - only needed for ECC_RED stage
     Vector CART(*space, CON, *basis);
@@ -132,8 +118,7 @@ void BNS_XCTS<eos_t>::setup_hydro_rescaling_syst() {
         syst->add_def(d, "H  = Hconst * (1. + Hscale2)");
     }
 
-    Param p;
-    Kadath::FUKA_EOS::set_eos_ope_struct<eos_t>()(*syst, p);
+    Kadath::FUKA_EOS::set_eos_ope_struct<eos_t>()(*syst, eos_param);
 
     // populate all the boiler-plate constants, variables, and definitions
     syst_init();
@@ -161,133 +146,39 @@ void BNS_XCTS<eos_t>::setup_hydro_rescaling_syst() {
     // eccentricity reduced ID
     syst->add_cst("ome", (*bconfig)(BIN_PARAMS::GOMEGA));
 
-    // orbital rotation vector field, corrected by the "center of mass" shift
-    syst->add_def("Morb^i = mg^i + xaxis * ey^i + yaxis * ex^i");
+    // orbital rotation corrected by the "center of mass" shifts, full shift
+    // including the inspiral (eccentricity reduction)
+    if (solver_stage == STAGES::ECC_RED)
+        binary_syst::add_orbital_shift(*syst,
+                                       true,
+                                       &bconfig->set(BIN_PARAMS::ADOT),
+                                       &CART);
+    else
+        binary_syst::add_orbital_shift(*syst, true);
 
-    std::string bigB{"B^i = bet^i + ome * Morb^i"};
-    if (solver_stage == STAGES::ECC_RED) {
-        syst->add_cst("adot", (*bconfig)(BIN_PARAMS::ADOT));
-        syst->add_cst("r", CART);
-        syst->add_def("comr^i = r^i - xaxis * ex^i + yaxis * ey^i");
-        // add contribution of ADOT to the total shift definition
-        bigB += " + adot * comr^i";
-    }
-
-    // full shift vector including inertial + orbital contributions
-    syst->add_def(bigB.c_str());
-
-    // the actual equations, defined differently in the different domains
+    bool const corot = bconfig->control(CONTROLS::COROT_BIN);
     for (int d = 0; d < ndom; d++) {
-        // if outside the stellar domains, without matter sources
-        // resort to the source-free constraint equations
-        // and set matter (and velocity potential) to zero
         if ((d >= space->ADAPTED2 + 1) ||
-            ((d >= space->ADAPTED1 + 1) && (d < space->NS2))) {
-            if (!bconfig->control(COROT_BIN))
-                syst->add_eq_full(d, "phi= 0");
-
-            syst->add_def(d, "eqP = D^i D_i P + A_ij * A^ij / P^7 / 8");
-            syst->add_def(
-                d,
-                "eqNP = D^i D_i NP - 7. / 8. * NP / P^8 * A_ij * A^ij");
-            syst->add_def(
-                d,
-                "eqbet^i = D_j D^j bet^i + D^i D_j bet^j / 3. - 2. * A^ij * "
-                "D_j Ntilde");
-
-        }
-        // in case of the domains harboring the two stars
-        // define all derived matter related quantities
-        // and enforce the transformed contraint equations (i.e. multiplied by p /
-        // rho)
-        else {
-            // 3-velocity and first integral of the Euler equation
-            // in case of corotation
-            if (bconfig->control(CONTROLS::COROT_BIN)) {
-                syst->add_def(d, "U^i    = B^i / N");
-                syst->add_def(d, "Usquare= P^4 * U_i * U^i");
-                syst->add_def(d, "Wsquare= 1 / (1 - Usquare)");
-                syst->add_def(d, "W      = sqrt(Wsquare)");
-                syst->add_def(d, "firstint = log(h * N / W)");
-            }
-            // 3-velocity, (approximate) first integral of the Euler equation
-            // and velocity potential equation
-            // in case of irrotational or spinning companions
-            else {
-                syst->add_def(d, "Wsquare= eta^i * eta_i / h^2 / P^4 + 1.");
-                syst->add_def(d, "W      = sqrt(Wsquare)");
-                syst->add_def(d, "U^i    = eta^i / P^4 / h / W");
-                syst->add_def(d, "Usquare= P^4 * U_i * U^i");
-                syst->add_def(d, "V^i    = N * U^i - B^i");
-                syst->add_def(d, "firstint = log(h * N / W + D_i phi * V^i)");
-                syst->add_def(d,
-                              "eqphi  = P^6 * W * V^i * D_i H + dHdlnrho * D_i "
-                              "(P^6 * W * V^i)");
-            }
-            // transformed source terms
-            syst->add_def(d, "Etilde = press * h * Wsquare - press * delta");
-            syst->add_def(d,
-                          "Stilde = 3 * press * delta + (Etilde + press * "
-                          "delta) * Usquare");
-            syst->add_def(d, "ptilde^i = press * h * Wsquare * U^i");
-
-            // transformed constraint equations
-            syst->add_def(
-                d,
-                "eqP = delta * D^i D_i P + A_ij * A^ij / P^7 / 8 * delta "
-                "+ 4piG / 2. * P^5 * Etilde");
-            syst->add_def(
-                d,
-                "eqNP = delta * D^i D_i NP - 7. / 8. * NP / P^8 * delta * "
-                "A_ij *A^ij "
-                "- 4piG / 2. * N * P^5 * (Etilde + 2. * Stilde)");
-            syst->add_def(
-                d,
-                "eqbet^i= delta * D_j D^j bet^i + delta * D^i D_j bet^j / 3. "
-                "- 2. * delta * A^ij * D_j Ntilde - 4. * 4piG * N * P^4 * "
-                "ptilde^i");
-
-            // baryonic mass volume integrant
-            syst->add_def(d, "intMb  = P^6 * rho * W");
-            // quasi-local ADM mass volume integrant
-            syst->add_def(d, "intM   = - D_i D^i P * 2. / 4piG");
-        }
+            ((d >= space->ADAPTED1 + 1) && (d < space->NS2)))
+            binary_syst::add_vacuum_eqdefs(*syst, d, corot, false);
+        else
+            binary_syst::add_matter_eqdefs(*syst, d, corot);
     }
-    // add equations to the system and demand continuity
-    // along the normal of the domains
-    space->add_eq(*syst, "eqNP= 0", "N", "dn(N)");
-    space->add_eq(*syst, "eqP= 0", "P", "dn(P)");
-    space->add_eq(*syst, "eqbet^i= 0", "bet^i", "dn(bet^i)");
+    binary_syst::add_metric_equations(*syst, *space, ndom);
 
-    // boundary conditions at infinity
-    syst->add_eq_bc(ndom - 1, OUTER_BC, "N=1");
-    syst->add_eq_bc(ndom - 1, OUTER_BC, "P=1");
-    syst->add_eq_bc(ndom - 1, OUTER_BC, "bet^i=0");
-
-    // boundary conditions defining the boundary of the adapted domains, i.e.
-    // vanishing matter
+    // the stellar surfaces are where the matter vanishes
     syst->add_eq_bc(space->ADAPTED1, OUTER_BC, "H = 0");
     syst->add_eq_bc(space->ADAPTED2, OUTER_BC, "H = 0");
 
-    // determine equations to add based on corotation
-    // or mixed spin binaries based on chi or fixed omega
-    if (!bconfig->control(CONTROLS::COROT_BIN)) {
+    if (!corot) {
         syst->add_eq_bc(space->ADAPTED1, OUTER_BC, "V^i * D_i H = 0");
         syst->add_eq_bc(space->ADAPTED2, OUTER_BC, "V^i * D_i H = 0");
-
-        for (int i = space->NS1; i < space->ADAPTED1; ++i) {
-            syst->add_eq_vel_pot(i, 2, "eqphi = 0", "phi=0");
-            syst->add_eq_matching(i, OUTER_BC, "phi");
-            syst->add_eq_matching(i, OUTER_BC, "dn(phi)");
-        }
-        syst->add_eq_vel_pot(space->ADAPTED1, 2, "eqphi = 0", "phi=0");
-
-        for (int i = space->NS2; i < space->ADAPTED2; ++i) {
-            syst->add_eq_vel_pot(i, 2, "eqphi = 0", "phi=0");
-            syst->add_eq_matching(i, OUTER_BC, "phi");
-            syst->add_eq_matching(i, OUTER_BC, "dn(phi)");
-        }
-        syst->add_eq_vel_pot(space->ADAPTED2, 2, "eqphi = 0", "phi=0");
+        binary_syst::add_velocity_potential_eqs(*syst,
+                                                space->NS1,
+                                                space->ADAPTED1);
+        binary_syst::add_velocity_potential_eqs(*syst,
+                                                space->NS2,
+                                                space->ADAPTED2);
 
         if (std::isnan(bconfig->set(BCO_PARAMS::FIXED_BCOMEGA, NODES::BCO1)))
             space->add_eq_int_outer_sphere_one(

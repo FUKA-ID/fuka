@@ -21,7 +21,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Configurator/config_binary.hpp"
-#include "Solvers/bns_xcts/bns_exporter.hpp"
+#include "FUKA_Solvers/BNS_XCTS/utilities/BNS_XCTS_exporter.hpp"
 #include "kadath_adapted.hpp"
 #include "kadath_bin_bh.hpp"
 
@@ -45,29 +45,29 @@ constexpr double dx = range / Npts;
 
 int main(int argc, char** argv) {
 
-  // expecting a configuration file on execution
-  if (argc < 2) {
-    std::cerr << "Usage: ./reader /<path>/<ID base name>.info" << std::endl;
-    std::cerr << "e.g. ./reader converged.BBH.9.info" << endl;
-    std::_Exit(EXIT_FAILURE);
-  }
+    // expecting a configuration file on execution
+    if (argc < 2) {
+        std::cerr << "Usage: ./reader /<path>/<ID base name>.info" << std::endl;
+        std::cerr << "e.g. ./reader converged.BBH.9.info" << endl;
+        std::_Exit(EXIT_FAILURE);
+    }
 
-  std::string ifilename{argv[1]};
+    std::string ifilename{argv[1]};
 
-  std::vector<double> xx(Npts);
-  std::vector<double> yy(Npts);
-  std::vector<double> zz(Npts);
+    std::vector<double> xx(Npts);
+    std::vector<double> yy(Npts);
+    std::vector<double> zz(Npts);
 
 #pragma omp parallel for
-  for (auto i = 0; i < Npts; ++i) {
-    xx[i] += i * dx;
-    yy[i] += i * dx;
-    zz[i] += i * dx;
-  }
+    for (auto i = 0; i < Npts; ++i) {
+        xx[i] += i * dx;
+        yy[i] += i * dx;
+        zz[i] += i * dx;
+    }
 
-  config_t bconfig(ifilename);
-  reader_t input_reader(ifilename);
-  interp_data(input_reader, xx, yy, zz);
+    config_t bconfig(ifilename);
+    reader_t input_reader(ifilename);
+    interp_data(input_reader, xx, yy, zz);
 
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

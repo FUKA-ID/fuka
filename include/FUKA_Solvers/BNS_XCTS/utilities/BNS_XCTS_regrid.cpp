@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include "FUKA_Solvers/utilities/binary/binary_setup.hpp"
 #include "FUKA_Solvers/utilities/config/config_utils.hpp"
 #include "FUKA_Solvers/utilities/fields/scalar_calculations.hpp"
 #include "Solvers/fuka_syst/fuka_syst_tools.hpp"
@@ -50,18 +51,14 @@ inline void BNS_XCTS_base::write_regridded_solution(
 
     const std::array<int, 2> old_adapted_doms{space->ADAPTED1, space->ADAPTED2};
 
-    std::array<const Domain_shell_outer_adapted*, 2> old_outer_adapted;
     std::array<const Domain_shell_inner_adapted*, 2> old_inner_adapted;
 
     for (int i = 0; i < 2; ++i) {
         int const d = old_adapted_doms[i];
-        old_outer_adapted[i] = dynamic_cast<const Domain_shell_outer_adapted*>(
-            space->get_domain(d));
         old_inner_adapted[i] = dynamic_cast<const Domain_shell_inner_adapted*>(
             space->get_domain(d + 1));
     }
 
-    int ndim = 3;
     int type_coloc = space->get_type_base();
 
     Kadath::bco_utils::update_config_NS_radii(*space,
@@ -74,37 +71,12 @@ inline void BNS_XCTS_base::write_regridded_solution(
                                               space->ADAPTED2,
                                               NODES::BCO1);
 
-    double rmax = std::max(target(BCO_PARAMS::RMID, NODES::BCO1),
-                           target(BCO_PARAMS::RMID, NODES::BCO2));
+    binary_setup::set_companion_outer_radii(target);
 
-    const double rout_sep_est = (target(BIN_PARAMS::DIST) / 2. - rmax) / 3. +
-                                rmax;
-    const double rout_max_est = Kadath::bco_utils::gold_ratio * rmax;
-    target.set(BCO_PARAMS::ROUT, NODES::BCO1) = rout_sep_est;
-    target.set(BCO_PARAMS::ROUT, NODES::BCO2) =
-        target(BCO_PARAMS::ROUT, NODES::BCO1);
-
-    // create old radius scalar field
-    Scalar old_space_radius(*space);
-    old_space_radius.annule_hard();
-
-    for (int d = 0; d < ndom; ++d) {
-        old_space_radius.set_domain(d) = space->get_domain(d)->get_radius();
-    }
-
-    // Get adapted domain radii
-    for (int i = 0; i < 2; ++i) {
-        int const dom = old_adapted_doms[i];
-        old_space_radius.set_domain(dom) =
-            old_outer_adapted[i]->get_outer_radius();
-    }
-    old_space_radius.std_base();
-    // end creating old radius scalar fields
-
-    // setup bounds for creating new space
-    std::vector<double> out_bounds(1 + target(BIN_PARAMS::OUTER_SHELLS));
-    for (int e = 0; e < out_bounds.size(); ++e)
-        out_bounds[e] = target(BIN_PARAMS::REXT) * (1. + e * 0.25);
+    Scalar const old_space_radius{
+        binary_setup::radius_field(*space, {space->ADAPTED1, space->ADAPTED2})};
+    std::vector<double> const out_bounds{
+        binary_setup::outer_shell_bounds(target)};
 
     std::vector<int> ns_interior_doms{
         FUKA_Syst_tools::vector_of_domains(space->NS1, space->ADAPTED1)};

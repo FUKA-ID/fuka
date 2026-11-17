@@ -5,7 +5,7 @@
 #pragma once
 #include "EOS/FUKA_EOS_Utilities.hh"
 #include "FUKA_Solvers/utilities/config/simple_calculations.hpp"
-#include "FUKA_Solvers/utilities/drivers/solve_NS_for_binary_v1.hpp"
+#include "FUKA_Solvers/utilities/drivers/solve_NS_for_binary.hpp"
 #include "FUKA_Solvers/utilities/fields/scalar_calculations.hpp"
 
 namespace Kadath {
@@ -62,7 +62,7 @@ void bns_xcts_setup_space(config_t& bconfig) {
     std::array<std::string, 2> filenames;
 
     for (int i = 0; i < 2; ++i)
-        filenames[i] = solve_NS_for_binary_v1(bconfig, bcos[i]);
+        filenames[i] = solve_NS_for_binary(bconfig, bcos[i]);
 
     // debugging only
     for (auto& f : filenames)

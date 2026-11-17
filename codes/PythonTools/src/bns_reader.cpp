@@ -23,7 +23,7 @@
 #include "Configurator/pyconfigurator.hpp"
 #include "EOS/EOS.hh"
 #include "EOS/FUKA_EOS_Utilities.hh"
-#include "Solvers/bns_xcts/bns_exporter.hpp"
+#include "FUKA_Solvers/BNS_XCTS/utilities/BNS_XCTS_exporter.hpp"
 #include "bco_utilities.hpp"
 #include "include/fuka_py.hpp"
 #include "kadath_bin_ns.hpp"

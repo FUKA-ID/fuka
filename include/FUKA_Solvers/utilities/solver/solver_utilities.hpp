@@ -1,6 +1,8 @@
 #pragma once
 #include <mpi.h>
 #include <algorithm>
+#include <filesystem>
+#include <sstream>
 #include <string>
 #include "Configurator/config_binary.hpp"
 #include "Configurator/configurator_boost.hpp"
@@ -66,6 +68,29 @@ void check_max_iter_exceeded(solver_t const& solver,
  * @param syst System of equations
  * @param p Parameter container (unused, but required by add_ope)
  */
+/**
+ * @brief Check that the solution file of a config exists and, optionally,
+ * print the config (rank 0).
+ * @throws std::runtime_error if the file is missing
+ */
+template <class config_t>
+void require_solution_file(config_t& bconfig,
+                           int const rank,
+                           bool const print = true) {
+    std::string const spacein = bconfig.space_filename();
+    if (!std::filesystem::exists(spacein)) {
+        std::stringstream ss;
+        ss << "File: " << spacein << " not found"
+           << ((rank == 0) ? "" : " for another rank") << ".\n";
+        throw std::runtime_error(ss.str());
+    }
+    if (print && rank == 0)
+        std::cout << "Config File: " << bconfig.config_filename_abs()
+                  << std::endl
+                  << "Fields File: " << spacein << std::endl
+                  << bconfig << std::endl;
+}
+
 /// Broadcast a string from rank 0 to every rank of MPI_COMM_WORLD.
 inline void broadcast_from_root(std::string& s) {
     int len = static_cast<int>(s.size());

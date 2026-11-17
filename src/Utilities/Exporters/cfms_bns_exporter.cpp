@@ -1,5 +1,5 @@
 #include <Configurator/config_binary.hpp>
-#include "Solvers/bns_xcts/bns_exporter.hpp"
+#include "FUKA_Solvers/BNS_XCTS/utilities/BNS_XCTS_exporter.hpp"
 
 namespace Kadath::FUKA_Solvers {
 #ifdef DEFAULT_KAD_MEM

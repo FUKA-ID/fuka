@@ -17,8 +17,7 @@ inline void initialize_binary_config_basics(config_t& bconfig,
     // Binary Parameters
     bconfig.set(BIN_PARAMS::REXT) = 2 * bconfig(BIN_PARAMS::DIST);
 
-    bconfig.set(BIN_PARAMS::Q) = bconfig(BCO_PARAMS::MADM, NODES::BCO1) /
-                                 bconfig(BCO_PARAMS::MCH, NODES::BCO2);
+    bconfig.set(BIN_PARAMS::Q) = M1 / M2;
     bconfig.set(BIN_PARAMS::Q) = (bconfig.set(BIN_PARAMS::Q) > 1.0)
                                      ? 1.0 / bconfig.set(BIN_PARAMS::Q)
                                      : bconfig.set(BIN_PARAMS::Q);
@@ -41,6 +40,24 @@ inline void initialize_binary_inspiral_config(config_t& bconfig,
 
     // delete ADOT, this can always be recalculated during
     // the eccentricity reduction stage
+    bconfig.reset(BIN_PARAMS::ADOT);
+}
+
+/**
+ * @brief Binary parameters of a new setup: REXT, q, Newtonian center of
+ * mass, and (except head-on) the 3PN orbital frequency; ADOT is reset (the
+ * eccentricity reduction recomputes it).
+ *
+ * @param M1, M2 masses of the companions
+ */
+template <class config_t>
+inline void setup_binary_config(config_t& bconfig,
+                                double const M1,
+                                double const M2) {
+    using namespace ::Kadath::FUKA_Config;
+    initialize_binary_config_basics(bconfig, M1, M2);
+    if (!bconfig.set_stage(STAGES::HEADON))
+        ::Kadath::bco_utils::KadathPNOrbitalParams(bconfig, M1, M2);
     bconfig.reset(BIN_PARAMS::ADOT);
 }
 

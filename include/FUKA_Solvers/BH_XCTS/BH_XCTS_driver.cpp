@@ -8,16 +8,6 @@ constexpr double spinup_chi_high = 0.8;
 /// Above this |chi| solutions are not necessarily stable.
 constexpr double stable_chi_limit = 0.84;
 
-inline void require_solution_file(BH_XCTS_config_t& bconfig, int const rank) {
-    std::string const spacein = bconfig.space_filename();
-    if (fs::exists(spacein))
-        return;
-    std::stringstream ss;
-    ss << "File: " << spacein << " not found"
-       << ((rank == 0) ? "" : " for another rank") << ".\n";
-    throw std::runtime_error(ss.str());
-}
-
 /**
  * @brief Settings of a stationary solve: store the final chi and, for a new
  * setup with |chi| > 0.5, start the spin-up at |chi| = 0.5.
@@ -86,7 +76,7 @@ inline int BH_XCTS_driver(BH_XCTS_config_t& bconfig,
     using namespace BH_XCTS_detail;
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    require_solution_file(bconfig, rank);
+    require_solution_file(bconfig, rank, false);
 
     // the stationary solution is computed without the linear boost
     double const xboost = bconfig.set(BCO_PARAMS::BVELX);

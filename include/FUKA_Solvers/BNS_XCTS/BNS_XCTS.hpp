@@ -12,8 +12,8 @@
  * https://arxiv.org/abs/2103.09911
  */
 #pragma once
-#include "FUKA_Solvers/FUKA_XCTS_Solver_base.hpp"
-#include "Solvers/sequences/bco_sequence.hpp"
+#include "FUKA_Solvers/FUKA_XCTS_Binary_base.hpp"
+#include "FUKA_Solvers/utilities/binary/binary_syst.hpp"
 #include "kadath_bin_ns.hpp"
 
 /**
@@ -23,79 +23,35 @@
 namespace Kadath::FUKA_Solvers {
 using namespace ::Kadath::FUKA_Config;
 
-using seq_t = bco_sequence<BCO_PARAMS, NODES>;
-using res_seq_t = Parameter_sequence<BIN_PARAMS>;
-
-struct BNS_XCTS_base
-    : public FUKA_XCTS_Solver_base<Kadath::Space_bin_ns,
-                                   kadath_config_boost<BIN_INFO>> {
-    using solver_base_t = FUKA_XCTS_Solver_base<Kadath::Space_bin_ns,
-                                                kadath_config_boost<BIN_INFO>>;
+struct BNS_XCTS_base : public FUKA_XCTS_Binary_base<Kadath::Space_bin_ns> {
+    using binary_base_t = FUKA_XCTS_Binary_base<Kadath::Space_bin_ns>;
 
    protected:
-    // EOS Parameters - Perhaps this should be a container?
-    internal_variable(double, h_cut);
-    internal_variable(std::string, eos_file);
-    internal_variable(std::string, eos_type);
-
-    // Sequence containers
-    ptr_data_member(seq_t const, ns1_seq, unique);
-    ptr_data_member(seq_t const, ns2_seq, unique);
-    ptr_data_member(res_seq_t, resolution, unique);
-
-    // Variable fields - i.e. Solution
-    ptr_data_member(Scalar, conformal_factor, unique);
-    ptr_data_member(Scalar, lapse, unique);
-    ptr_data_member(Vector, shift, unique);
-    ptr_data_member(Scalar, logh, unique);
-    ptr_data_member(Scalar, phi, unique);
-
-    /// Unscaled enthalpy of the hydro-rescaling stages (system constant).
-    ptr_data_member(Scalar, logh_const, unique);
-
-    // Domain centers
-    internal_variable(double, xc1);
-    internal_variable(double, xc2);
-    internal_variable(double, xo);
+    // Residual scaling factors of the enthalpy (hydro-rescaling stages)
     internal_variable(double, H_scale1);
     internal_variable(double, H_scale2);
 
+   protected:
     BNS_XCTS_base(base_config_t* config_,
-                  seq_t const& ns1_seq_,
-                  seq_t const& ns2_seq_,
-                  res_seq_t const& res_,
+                  bco_seq_t const& ns1_seq_,
+                  bco_seq_t const& ns2_seq_,
+                  bin_res_seq_t const& res_,
                   std::string outputdir_,
                   int const rank_);
 
-    // Initialization Methods
-    void initialize_support_containers() override;
-    void reset_support_containers() override;
-
-    // I/O Methods
-    void save_solution_to_file() const override;
-    void load_solution_from_file() override;
-    void update_config_quantities() override {};
-    void post_newton_step() override;
-    void update_coordinate_fields() override;
-    bool is_compatible_solution(base_config_t& old_config) override;
-
-   public:
-    /// Members a revert needs (Solution_snapshot).
-    static constexpr auto snapshot_members() {
-        return std::make_tuple(&BNS_XCTS_base::space,
-                               &BNS_XCTS_base::bconfig,
-                               &BNS_XCTS_base::conformal_factor,
-                               &BNS_XCTS_base::lapse,
-                               &BNS_XCTS_base::shift,
-                               &BNS_XCTS_base::logh,
-                               &BNS_XCTS_base::phi);
+    std::array<int, 2> nucleus_domains() const override {
+        return {space->NS1, space->NS2};
     }
 
+    std::unique_ptr<base_space_t> read_space(FILE* ff) const override;
+
+    void update_config_quantities() override {}
+
+   public:
     bool increment_resolution() override;
     void regrid() override;
     void write_regridded_solution(base_config_t& target) const override;
     void syst_init() override;
-    void reset_all_ptrs() override;
 
     void print_diagnostics(const int ite, const double conv) const override;
     std::string converged_filename(const std::string stage) const override;
@@ -104,9 +60,9 @@ struct BNS_XCTS_base
 template <class eos_t>
 struct BNS_XCTS : public BNS_XCTS_base {
     BNS_XCTS(BNS_XCTS_base::base_config_t* config_,
-             seq_t const& ns1_seq_,
-             seq_t const& ns2_seq_,
-             res_seq_t const& res_,
+             bco_seq_t const& ns1_seq_,
+             bco_seq_t const& ns2_seq_,
+             bin_res_seq_t const& res_,
              std::string outputdir_,
              int const rank_)
         : BNS_XCTS_base(config_, ns1_seq_, ns2_seq_, res_, outputdir_, rank_) {
