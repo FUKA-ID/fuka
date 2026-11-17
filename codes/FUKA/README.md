@@ -149,8 +149,8 @@ Values in parentheses are estimated from the 40 n^2 bytes of the dense solver pl
 - With MUMPS the binary cases at resolution 9 to 11 run on 2 nodes (80 ranks); more ranks shorten the
   Jacobian assembly but add 0.2-0.5 GB per rank of replicated memory.
 - Keep the first node's memory (`max ... GB per node` in the log) below the node memory; it is the largest.
-  Rank 0 grows with the Jacobian's non-zeros: about 53 GB at 1.5e9 and 149 GB at 2.8e9 (Kerr-Schild binaries,
-  centralized input, 64-bit METIS for the latter; distributed input, the default now, lowers this). For such
+  Rank 0 grows with the Jacobian's non-zeros: about 53 GB at 1.5e9 and 149 GB at 2.8e9 non-zeros (centralized
+  input, 64-bit METIS for the latter; distributed input, the default now, lowers this by about a third). For such
   cases put rank 0 alone on the first node (e.g. a heterogeneous job, or a host file with one slot on the first
   node).
 - Use `OMP_NUM_THREADS=1` (one MPI rank per core).

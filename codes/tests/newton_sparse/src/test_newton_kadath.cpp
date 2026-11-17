@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -514,6 +515,17 @@ void test_krylov(SolveResult const& dense, std::string const& t) {
 
 }  // namespace
 
+/// T4f: divergence criterion of the sparse Newton solvers (stop the retry ladder on a diverged iterate).
+void test_divergence() {
+    double const inf = std::numeric_limits<double>::infinity();
+    check(!newton_diverges(0., 1e23), "T4f first residual of a system never diverges");
+    check(!newton_diverges(165., 1257.), "T4f residual growing 7.6x (a recovering Newton step) is not divergence");
+    check(!newton_diverges(1e2, 1e-3), "T4f residual after a parameter change below the largest is not divergence");
+    check(newton_diverges(1257., 1.07e23), "T4f residual 1257 -> 1.07e23 (BHNS q=0.01) diverges");
+    check(newton_diverges(1., std::nan("")) && newton_diverges(1., inf) && newton_diverges(0., inf),
+          "T4f non-finite residual diverges");
+}
+
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
@@ -524,6 +536,7 @@ int main(int argc, char** argv) {
     test_jx_columns(true);
     test_jx_variable_domains<Space_spheric_adapted>("adapted shells");
     test_jx_variable_domains<Space_adapted_bh>("homothetic shells (BH)");
+    test_divergence();
     test_single_update();
     SolveResult const dense = test_full_solve();
     test_krylov(dense, "T4d");  // last: exercises the release in MPI_Finalize

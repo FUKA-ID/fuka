@@ -49,8 +49,7 @@ of the nodes. Without MUMPS, FUKA builds and runs exactly as before (dense ScaLA
 
    - The orderings need 64-bit indices for large Jacobians: MUMPS orders the graph of A + A^T, and
      with 32-bit indices it stops with `INFOG(1) = -51` once that graph has more than 2^31 - 1 entries
-     (e.g. a Kerr-Schild binary with hole shells finer than (11, 11, 20), about 1.5e9 Jacobian
-     non-zeros). FUKA then falls back to MUMPS's internal AMF ordering, which works but gives larger
+     (about 1.5e9 Jacobian non-zeros). FUKA then falls back to MUMPS's internal AMF ordering, which works but gives larger
      factors.
    - MUMPS itself keeps its default 32-bit integers (`~int64`): it reads the index width of METIS from
      `IDXTYPEWIDTH` in `metis.h` and that of Scotch from `scotch.h`, and calls them accordingly.

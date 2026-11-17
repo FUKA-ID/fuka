@@ -53,8 +53,20 @@ NewtonKrylovStats const& newton_krylov_stats();
 void reset_newton_krylov();
 #endif
 
+/// A Newton iterate diverges when max|F| exceeds this factor times the largest residual seen for the same system
+/// (its initial residual or the one after a parameter change). Newton steps grow the residual by a few times at
+/// most when they recover; a diverged iterate (e.g. 1e3 -> 1e23) cannot be repaired by the linear solver.
+constexpr double kDivergenceGrowth = 1e6;
+
+/// True if @p residual (max|F|) is not finite or exceeds kDivergenceGrowth times @p largest (the largest finite
+/// residual of the system so far; 0 = none yet).
+bool newton_diverges(double largest, double residual);
+
 /// Dispatches to the configured backend (GAUSS_NEWTON always uses ScaLAPACK) and prints the peak memory;
-/// collective. MUMPS failures are retried along mumps_retry_ladder; if every attempt fails the run aborts.
+/// collective. MUMPS failures are retried along mumps_retry_ladder; if every attempt fails the run aborts. On a
+/// diverging iterate (newton_diverges) the sparse solvers try only the configured options and stop if they fail,
+/// instead of the fallbacks, which need more memory (up to out-of-core) and cannot repair the iteration; a
+/// non-finite residual stops the run.
 Array<double> newton_update(System_of_eqs& syst,
                             Array<double> const& second,
                             System_of_eqs::SOLVER solver);

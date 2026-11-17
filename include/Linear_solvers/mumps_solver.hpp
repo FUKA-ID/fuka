@@ -32,8 +32,8 @@ struct MumpsOptions {
     /// FM_2WayCutRefine) on some FUKA Jacobians, also at n = 6k-52k on 80 ranks; the signal cannot be caught.
     bool parallel_analysis = false;
     /// ICNTL(7) of the sequential analysis: 5 = METIS, 2 = AMF (internal). METIS and ParMETIS here use 32-bit
-    /// indices and refuse graphs with more than 2^31 - 1 entries (INFOG(1) = -51, e.g. KS binaries with finer
-    /// hole shells than (11, 11, 20)); with_internal_ordering() switches to AMF, which has no such limit but
+    /// indices and refuse graphs with more than 2^31 - 1 entries (INFOG(1) = -51, from about 1.5e9 Jacobian
+    /// non-zeros); with_internal_ordering() switches to AMF, which has no such limit but
     /// gives more fill-in.
     int ordering = 5;
     /// It is also skipped when the graph of A + A^T may exceed 2^31 entries (2 nnz > 2^31 - 1): MUMPS's

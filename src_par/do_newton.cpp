@@ -458,6 +458,20 @@ constexpr double kExactStepTolerance = 1e-10;  ///< GMRES tolerance of that exac
 /// inaccurate preconditioner must not send MUMPS down the retry ladder.
 constexpr double kPreconditionerResidual = 1e-6;
 
+/// Largest finite max|F| of the current system and whether its latest iterate diverges (newton_diverges).
+struct DivergenceState {
+	unsigned long syst_id = 0;  ///< System_of_eqs::get_instance_id() (0: none).
+	double largest = 0.;   ///< largest finite max|F| including the current iterate
+	double previous = 0.;  ///< largest before the current iterate (what it was compared with)
+	double residual = 0.;
+	bool diverging = false;
+};
+
+DivergenceState& divergence_state() {
+	static DivergenceState state;
+	return state;
+}
+
 /// Assembles the sparse Jacobian, solves J x = second along the MUMPS retry ladder and reports statistics; the
 /// successful solver (with its factors) is returned in @p solver. Collective. @return 0 or the last status.
 /// @param drop_tolerance > kJacobianNoise removes more entries (drop_negligible): the factors and x then belong to
@@ -570,6 +584,8 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 	base_options.ooc_dir = ooc_dir;
 	if (preconditioner)
 		base_options.blr_tolerance = blr_tolerance;
+	// A diverging iterate: the fallbacks cannot repair it and the last ones need far more memory.
+	base_options.retry = !divergence_state().diverging;
 	if (input_mode == 1) {
 		base_options.centralized = false;
 		base_options.matching_entries = 16;
@@ -662,7 +678,13 @@ int sparse_newton_step(System_of_eqs& syst, Array<double> const& second, std::ve
 [[noreturn]] void abort_after_mumps_failure(int status) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	if (rank == 0)
+	DivergenceState const& d = divergence_state();
+	if (rank == 0 && d.diverging)
+		std::cout << "MUMPS failed on a diverging Newton iterate (" << mumps_error_message(status) << "; max|F| = "
+		          << d.residual << ", largest residual of this system before: " << d.previous
+		          << "); stopping without the fallback configurations. The Newton iteration diverged, not the linear "
+		             "solver: check the initial guess and the configuration." << std::endl;
+	else if (rank == 0)
 		std::cout << "MUMPS failed with every configuration of the retry ladder (" << mumps_error_message(status)
 		          << "); stopping. KADATH_LINSOLVE=scalapack solves densely if memory allows." << std::endl;
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -929,11 +951,46 @@ NewtonBackend newton_backend_from_env() {
 	abort();
 }
 
+bool newton_diverges(double largest, double residual) {
+	return !std::isfinite(residual) || (largest > 0. && residual > kDivergenceGrowth * largest);
+}
+
 Array<double> newton_update(System_of_eqs& syst, Array<double> const& second, System_of_eqs::SOLVER solver) {
 	int rank;
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	NewtonBackend const backend =
 	    (solver == System_of_eqs::GAUSS_NEWTON) ? NewtonBackend::SCALAPACK : newton_backend_from_env();
+#ifdef KADATH_USE_MUMPS
+	if (backend != NewtonBackend::SCALAPACK) {
+		// max|F| of this iterate against the largest residual of the system so far (rank 0's, as everywhere).
+		double residual = 0.;
+		if (rank == 0)
+			for (int i = 0; i < second.get_size(0); ++i)
+				residual = std::isfinite(second(i)) ? std::max(residual, std::fabs(second(i)))
+				                                    : std::numeric_limits<double>::infinity();
+		MPI_Bcast(&residual, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		DivergenceState& d = divergence_state();
+		if (d.syst_id != syst.get_instance_id())
+			d = DivergenceState{syst.get_instance_id()};
+		d.residual = residual;
+		d.previous = d.largest;
+		d.diverging = newton_diverges(d.largest, residual);
+		if (!std::isfinite(residual)) {
+			if (rank == 0)
+				std::cout << "Newton: the residual is not finite; the iteration diverged. Stopping (check the initial "
+				             "guess and the configuration)." << std::endl;
+			MPI_Barrier(MPI_COMM_WORLD);
+			abort();
+		}
+		if (d.diverging && rank == 0)
+			std::cout << "Newton: max|F| = " << residual << " is " << residual / d.largest
+			          << " times the largest residual of this system so far (" << d.largest
+			          << "): the iteration diverges. MUMPS uses only the configured options for this step and stops "
+			             "if they fail; its fallbacks need more memory and cannot repair a diverging iteration."
+			          << std::endl;
+		d.largest = std::max(d.largest, residual);
+	}
+#endif
 
 	Array<double> X (syst.get_nbr_unknowns());
 	switch (backend) {

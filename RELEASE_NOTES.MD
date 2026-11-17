@@ -28,6 +28,9 @@
 * MUMPS out-of-core when memory is short: if the factors do not fit in memory they are written to disk
   (logged as `MUMPS: OUT-OF-CORE: insufficient memory ...`); `KADATH_MUMPS_OOC=off` stops with an error instead,
   `on` always uses the disk, `KADATH_MUMPS_OOC_DIR` sets the directory.
+* A diverging Newton iteration (non-finite residual, or one growing by more than 1e6 over the largest residual of
+  the system) stops with a message instead of trying the MUMPS fallback configurations, which need more memory
+  and cannot repair it.
 ### Bug Fixes
 * Solutions, checkpoints and config files are written atomically (temporary file, `fsync`, rename) by
   `bco_utils::save_to_file` and `write_config`. Rank 0 rewrites e.g. `ns_regrid.dat` under the same name
