@@ -24,7 +24,7 @@
 #include "Configurator/pyconfigurator.hpp"
 #include "EOS/EOS.hh"
 #include "EOS/FUKA_EOS_Utilities.hh"
-#include "Solvers/bhns_xcts/bhns_exporter.hpp"
+#include "FUKA_Solvers/BHNS_XCTS/utilities/BHNS_XCTS_exporter.hpp"
 #include "bco_utilities.hpp"
 #include "include/fuka_py.hpp"
 #include "kadath_bhns.hpp"

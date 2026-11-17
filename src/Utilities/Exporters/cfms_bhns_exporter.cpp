@@ -1,4 +1,4 @@
-#include "Solvers/bhns_xcts/bhns_exporter.hpp"
+#include "FUKA_Solvers/BHNS_XCTS/utilities/BHNS_XCTS_exporter.hpp"
 
 namespace Kadath::FUKA_Solvers {
 #ifdef DEFAULT_KAD_MEM

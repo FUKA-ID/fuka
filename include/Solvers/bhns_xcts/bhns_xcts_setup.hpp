@@ -20,6 +20,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+/// \file
+/// \deprecated Superseded by FUKA_Solvers/BHNS_XCTS; kept until it is
+/// removed.
 #include <array>
 #include <string>
 #include "bhns_xcts_solver.hpp"
