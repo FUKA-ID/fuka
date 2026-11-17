@@ -119,27 +119,37 @@ struct FUKA_XCTS_Solver_base : public FUKA_Solver_base {
     }
 
     /**
-     * @brief Look for the converged solution of the current stage, first in
-     * the output directory, then in the central COs directory (SAVE_COS).
-     * When found, the config is replaced by the solution's config, keeping
-     * the current stages, controls and settings.
+     * @brief Look for the converged solution of the current stage in the
+     * output directory, the config's directory, then the central COs
+     * directory (SAVE_COS). When found, the config is replaced by the
+     * solution's config, keeping the current stages, controls and settings.
+     *
+     * Rank 0 decides and broadcasts the path: the config's directory can
+     * differ between ranks (only rank 0 writes and updates it), and every
+     * rank must take the same branch.
      *
      * @return true if a compatible solution was found
      */
     bool solution_exists() {
         std::string const prev_name{converged_filename(stagename)};
-        std::string const prev_abs{bconfig->config_outputdir() + prev_name};
-        std::string const central_abs{get_cos_path() + prev_name};
-
-        auto found = [](std::string const& p) {
-            return fs::exists(p + ".info") && fs::exists(p + ".dat");
-        };
         std::string path{};
-        if (found(prev_abs))
-            path = prev_abs;
-        else if (bconfig->control(SAVE_COS) && found(central_abs))
-            path = central_abs;
-        else
+        if (rank == 0) {
+            auto found = [](std::string const& p) {
+                return fs::exists(p + ".info") && fs::exists(p + ".dat");
+            };
+            std::array<std::string, 3> const candidates{
+                (fs::path(outputdir) / prev_name).string(),
+                bconfig->config_outputdir() + prev_name,
+                bconfig->control(SAVE_COS) ? get_cos_path() + prev_name : ""};
+            for (auto const& c : candidates) {
+                if (!c.empty() && found(c)) {
+                    path = c;
+                    break;
+                }
+            }
+        }
+        broadcast_from_root(path);
+        if (path.empty())
             return false;
 
         base_config_t old_solution(path + ".info");
@@ -223,6 +233,8 @@ struct FUKA_XCTS_Solver_base : public FUKA_Solver_base {
         bconfig->set_filename(converged_filename(stagename));
         if (rank == 0)
             checkpoint();
+        // rank 0 moved its config to the output directory while saving
+        bconfig->set_outputdir(outputdir);
         syst.reset(nullptr);
         MPI_Barrier(MPI_COMM_WORLD);
         return EXIT_SUCCESS;

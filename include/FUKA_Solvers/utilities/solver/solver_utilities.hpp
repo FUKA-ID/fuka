@@ -1,4 +1,5 @@
 #pragma once
+#include <mpi.h>
 #include <algorithm>
 #include <string>
 #include "Configurator/config_binary.hpp"
@@ -65,6 +66,15 @@ void check_max_iter_exceeded(solver_t const& solver,
  * @param syst System of equations
  * @param p Parameter container (unused, but required by add_ope)
  */
+/// Broadcast a string from rank 0 to every rank of MPI_COMM_WORLD.
+inline void broadcast_from_root(std::string& s) {
+    int len = static_cast<int>(s.size());
+    MPI_Bcast(&len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    s.resize(len);
+    if (len > 0)
+        MPI_Bcast(s.data(), len, MPI_CHAR, 0, MPI_COMM_WORLD);
+}
+
 /**
  * @brief Next order of a resolution sequence: the next approved order
  * (bco_utils::next_resolution), or +2 for an order off the approved list,
