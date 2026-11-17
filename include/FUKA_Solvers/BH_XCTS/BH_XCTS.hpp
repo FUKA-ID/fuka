@@ -100,6 +100,10 @@ struct BH_XCTS_base
  * @brief Stationary BH stages: TOTAL (fixed lapse on the horizon), TOTAL_BC
  * (von Neumann lapse condition) and LINBOOST (TOTAL_BC with a linear boost,
  * BVELX/BVELY, at infinity).
+ *
+ * TOTAL_BC is the default stage. TOTAL runs before it when `total on` is
+ * set in the stages of the BH config. LINBOOST has no config key; it runs
+ * after TOTAL_BC when a caller enables the stage.
  */
 struct BH_XCTS : public BH_XCTS_base {
     BH_XCTS(base_config_t* config_,
