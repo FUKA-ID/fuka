@@ -53,16 +53,14 @@ struct launch_NS_XCTS_solver {
             int exit_status = EXIT_SUCCESS;
             do {
                 // initial solution
-                solver.setup_syst();
-                solver.do_newton();
+                solver.solve();
 
                 if (!ignore_resinc && !bconfig.control(CONTROLS::ITERATIVE_M)) {
                     // Make sure final solution uses optimal domain decomposition
                     solver.regrid();
 
                     // resolve at current resolution
-                    solver.setup_syst();
-                    solver.do_newton();
+                    solver.solve();
                 }
 
                 // Obtain final resolution for the desired
@@ -76,8 +74,7 @@ struct launch_NS_XCTS_solver {
                     solver.regrid();
 
                     // initial solution
-                    solver.setup_syst();
-                    exit_status = solver.do_newton();
+                    exit_status = solver.solve();
                 }
             } while (!ignore_seq && solver.increment_seq());
             return exit_status;
@@ -177,7 +174,6 @@ inline int NS_XCTS_solver_driver(NS_XCTS_BASE::base_config_t& bconfig,
                                  ns_sequence const& seq,
                                  Parameter_sequence<BCO_PARAMS>& resolution,
                                  std::string outputdir) {
-    int exit_status = RELOAD_FILE;
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -190,7 +186,7 @@ inline int NS_XCTS_solver_driver(NS_XCTS_BASE::base_config_t& bconfig,
     const std::string eos_type =
         bconfig.template eos<std::string>(EOS_PARAMS::EOSTYPE);
     using namespace Kadath::FUKA_EOS;
-    exit_status =
+    int const exit_status =
         EOS_Function_Dispatcher::dispatch<launch_NS_XCTS_solver>(bconfig,
                                                                  eos_type,
                                                                  rank,
@@ -400,8 +396,7 @@ struct launch_NS_XCTS_boost_solver {
                                                          outputdir,
                                                          &binary_config,
                                                          rank);
-        boosted_uniformrot_solver.setup_syst();
-        return boosted_uniformrot_solver.do_newton();
+        return boosted_uniformrot_solver.solve();
     };
 };
 
@@ -411,7 +406,6 @@ inline int NS_XCTS_binary_boost_driver(config_t& bconfig,
                                        std::string outputdir,
                                        kadath_config_boost<BIN_INFO> binconfig,
                                        const size_t bco) {
-    int exit_status = RUN_BOOST;
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     using namespace Kadath::FUKA_EOS;
@@ -425,25 +419,20 @@ inline int NS_XCTS_binary_boost_driver(config_t& bconfig,
     ns_sequence tmp_seq{};
     verify_ns_fixing_values(bconfig, tmp_seq);
     bconfig.set_stage(BIN_BOOST) = false;
-    exit_status = NS_XCTS_driver(bconfig, tmp_seq, resolution, outputdir);
+    NS_XCTS_driver(bconfig, tmp_seq, resolution, outputdir);
 
     bconfig.set_stage(BIN_BOOST) = true;
-    exit_status = RUN_BOOST;
-    // FIXME make sure only last stage is active?
-    // Used to manually disable norot here.
-    while (exit_status == RUN_BOOST) {
-        exit_status =
-            EOS_Function_Dispatcher::dispatch<launch_NS_XCTS_boost_solver>(
-                bconfig,
-                eos_type,
-                rank,
-                bconfig,
-                outputdir,
-                resolution,
-                binconfig,
-                tmp_seq);
-        MPI_Barrier(MPI_COMM_WORLD);
-    }
+    int const exit_status =
+        EOS_Function_Dispatcher::dispatch<launch_NS_XCTS_boost_solver>(
+            bconfig,
+            eos_type,
+            rank,
+            bconfig,
+            outputdir,
+            resolution,
+            binconfig,
+            tmp_seq);
+    MPI_Barrier(MPI_COMM_WORLD);
     return exit_status;
 }
 

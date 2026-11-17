@@ -39,18 +39,22 @@ struct Boosted_NS_XCTS : public NS_XCTS_UNIFORM_ROT<eos_t> {
     using NS_XCTS_UNIFORM_ROT<eos_t>::cfields;
     using NS_XCTS_UNIFORM_ROT<eos_t>::rank;
     using NS_XCTS_UNIFORM_ROT<eos_t>::reload;
-    using NS_XCTS_UNIFORM_ROT<eos_t>::solution_exists;
 
-    ptr_data_member(binary_config_t, binary_config, unique);
     ptr_data_member(Kadath::Scalar, phi, unique);
 
     internal_variable(double, H_scale);
 
    protected:
     void load_solution_from_file() override;
+    void save_solution_to_file() const override;
 
    public:
-    Boosted_NS_XCTS() = default;
+    /// Members a revert needs (Solution_snapshot).
+    static constexpr auto snapshot_members() {
+        return std::tuple_cat(NS_XCTS_BASE::snapshot_members(),
+                              std::make_tuple(&Boosted_NS_XCTS::phi));
+    }
+
     Boosted_NS_XCTS(base_config_t* config_,
                     ns_sequence const& seq_,
                     Parameter_sequence<BCO_PARAMS> const& res_,
@@ -58,11 +62,12 @@ struct Boosted_NS_XCTS : public NS_XCTS_UNIFORM_ROT<eos_t> {
                     binary_config_t* binary_config_ = nullptr,
                     int const rank_ = 0);
 
-    void setup_syst();
-    void init_syst();
-    void save_to_file() const override;
+    void setup_syst() override;
+    void reset_all_ptrs() override;
 
-    ~Boosted_NS_XCTS() { binary_config.release(); }
+   private:
+    /// Non-owning: the binary config (DIST, GOMEGA) of the caller.
+    binary_config_t* binary_config;
 };
 }  // namespace Kadath::FUKA_Solvers
 

@@ -67,18 +67,6 @@ std::string NS_XCTS_DIFF_ROT<eos_t>::converged_filename(
 
 template <class eos_t>
 void NS_XCTS_DIFF_ROT<eos_t>::setup_syst() {
-    int exit_status = EXIT_SUCCESS;
-
-    // We use `config_filename()` vs `config_filename_abs()` since
-    // `solution_exists` will probe the HOME_KADATH/COs directory
-    auto const current = bconfig->config_filename();
-    if (!bconfig->control(RESOLVE) && solution_exists()) {
-        if (rank == 0) {
-            std::cout << "Solved previously: " << bconfig->config_filename_abs()
-                      << std::endl;
-        }
-        reload();
-    }
 
     initialize_diffrot_params();
     // Update vector fields
@@ -455,6 +443,12 @@ void NS_XCTS_DIFF_ROT<eos_t>::initialize_diffrot_params() {
         diffrot_params[DIFFROT_PARAMS::DIFF_RRATIO] =
             (*bconfig).template diffrot<double>(DIFFROT_PARAMS::DIFF_RRATIO);
     }
+}
+
+template <class eos_t>
+void NS_XCTS_DIFF_ROT<eos_t>::initialize_support_containers() {
+    NS_XCTS_BASE::initialize_support_containers();
+
     pos_origin.reset(new Index(space->get_domain(0)->get_nbr_points()));
     auto npts = space->get_domain(1)->get_nbr_points();
     pos_eq.reset(new Index(npts));
@@ -471,25 +465,10 @@ void NS_XCTS_DIFF_ROT<eos_t>::initialize_diffrot_params() {
 
 template <class eos_t>
 void NS_XCTS_DIFF_ROT<eos_t>::reset_all_ptrs() {
-    // Fields
-    conformal_factor.reset(nullptr);
-    lapse.reset(nullptr);
-    shift.reset(nullptr);
-    logh.reset(nullptr);
-    diff_omega.reset(nullptr);
-
-    // Containers
-    basis.reset(nullptr);
-    fmet.reset(nullptr);
-    syst.reset(nullptr);
-    cfields.reset(nullptr);
-    coord_vectors.reset(nullptr);
     ones.reset(nullptr);
     pos_origin.reset(nullptr);
     pos_eq.reset(nullptr);
     pos_pole.reset(nullptr);
-
-    // Space
-    space.reset(nullptr);
+    NS_XCTS_BASE::reset_all_ptrs();
 }
 }  // namespace Kadath::FUKA_Solvers

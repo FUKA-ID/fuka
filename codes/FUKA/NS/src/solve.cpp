@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "FUKA_Solvers/NS_XCTS/NS_XCTS_driver.hpp"
 #include "FUKA_Solvers/utilities/solver/solver_startup.hpp"
-#include "Solvers/ns_3d_xcts/ns_3d_xcts_driver.hpp"
 #include "Solvers/sequences/ns_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
 #include "Solvers/sequences/sequence_utilities.hpp"
@@ -69,6 +69,11 @@ int main(int argc, char** argv) {
         bconfig.open_config();
         bconfig.control(CONTROLS::SEQUENCES) = InitSolver::setup_first;
         EOS_initialize::init(bconfig);
+        // the uniformly rotating stage is named total_bc in NS configs
+        if (bconfig.set_stage(STAGES::TOTAL_BC)) {
+            bconfig.set_stage(STAGES::TOTAL_BC) = false;
+            bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
+        }
 
         auto tree = bconfig.get_config_tree();
         auto N = number_of_sequences(tree, MBCO_PARAMS, "ns");
@@ -84,23 +89,15 @@ int main(int argc, char** argv) {
         verify_resolution_sequence(bconfig, resolution);
 
         ns_sequence seq = find_ns_sequence(tree);
-        verify_ns_fixing_values(bconfig, seq);
-
-        initialize_config_from_fixing_values(bconfig, seq);
-        if (!seq.is_set() && !bconfig.control(CONTROLS::SEQUENCES)) {
-            int err =
-                ns_3d_xcts_driver(bconfig, resolution, InitSolver::outputdir);
-        } else {
-
+        if (seq.is_set()) {
             auto [branch_name, key, val] = find_leaf(tree, "N");
             if (!key.empty())
                 seq.set_N(std::stoi(val));
-
-            ns_3d_xcts_sequence(bconfig,
-                                seq,
-                                resolution,
-                                InitSolver::outputdir);
         }
+
+        verify_ns_fixing_values(bconfig, seq);
+        initialize_config_from_fixing_values(bconfig, seq);
+        NS_XCTS_driver(bconfig, seq, resolution, InitSolver::outputdir);
     }
     MPI_Finalize();
     return EXIT_SUCCESS;

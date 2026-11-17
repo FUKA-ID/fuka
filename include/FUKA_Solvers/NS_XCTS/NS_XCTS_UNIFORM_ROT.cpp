@@ -66,19 +66,6 @@ std::string NS_XCTS_UNIFORM_ROT<eos_t>::converged_filename(
 
 template <class eos_t>
 void NS_XCTS_UNIFORM_ROT<eos_t>::setup_syst() {
-    int exit_status = EXIT_SUCCESS;
-    double loghc = std::log((*bconfig)(BCO_PARAMS::HC));
-
-    // We use `config_filename()` vs `config_filename_abs()` since
-    // `solution_exists` will probe the HOME_KADATH/COs directory
-    auto const current = bconfig->config_filename();
-    if (!bconfig->control(RESOLVE) && solution_exists()) {
-        if (rank == 0) {
-            std::cout << "Solved previously: " << bconfig->config_filename_abs()
-                      << std::endl;
-        }
-        reload();
-    }
 
     update_fields_co(*cfields, *coord_vectors, {}, 0.);
     syst.reset(new System_of_eqs(*space));

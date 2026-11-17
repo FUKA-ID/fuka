@@ -7,13 +7,13 @@ Boosted_NS_XCTS<eos_t>::Boosted_NS_XCTS(
     std::string outputdir_,
     binary_config_t* binary_config_,
     int const rank_)
-    : NS_XCTS_UNIFORM_ROT<eos_t>(config_, seq_, res_, outputdir_, rank_) {
+    : NS_XCTS_UNIFORM_ROT<eos_t>(config_, seq_, res_, outputdir_, rank_),
+      binary_config(binary_config_) {
 
     this->solver_stage = Kadath::FUKA_Config::STAGES::BIN_BOOST;
     this->stagename = "BIN_BOOST";
 
-    if (binary_config_ != nullptr) {
-        binary_config.reset(binary_config_);
+    if (binary_config != nullptr) {
         std::stringstream stage_ss;
         stage_ss << "BIN_BOOST_" << (*binary_config)(BIN_PARAMS::DIST) << "_"
                  << (*binary_config)(BIN_PARAMS::GOMEGA);
@@ -23,7 +23,7 @@ Boosted_NS_XCTS<eos_t>::Boosted_NS_XCTS(
 }
 
 template <class eos_t>
-void Boosted_NS_XCTS<eos_t>::save_to_file() const {
+void Boosted_NS_XCTS<eos_t>::save_solution_to_file() const {
     bconfig->set_outputdir(this->outputdir);
     Scalar rescaled_logh(syst->give_val_def("H")());
     if (this->diff_omega) {
@@ -62,17 +62,6 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
         }
         std::cout << "############################" << std::endl;
     }
-    // We use `config_filename()` vs `config_filename_abs()` since
-    // `solution_exists` will probe the HOME_KADATH/COs directory
-    auto const current = bconfig->config_filename();
-    if (!bconfig->control(RESOLVE) && solution_exists()) {
-        if (rank == 0) {
-            std::cout << "Solved previously: " << bconfig->config_filename_abs()
-                      << std::endl;
-        }
-        reload();
-    }
-
     // flag needs to be set in order to be used during import into
     // a BNS or BHNS setup
     this->bconfig->set_field(PHI) = true;
@@ -192,6 +181,12 @@ void Boosted_NS_XCTS<eos_t>::setup_syst() {
                       OUTER_BC,
                       "integ(intS) - chi * Madm * Madm = 0");
     space->add_eq_int_volume(*syst, 2, "integvolume(intMb) = Mb");
+}
+
+template <class eos_t>
+void Boosted_NS_XCTS<eos_t>::reset_all_ptrs() {
+    phi.reset(nullptr);
+    NS_XCTS_UNIFORM_ROT<eos_t>::reset_all_ptrs();
 }
 
 template <class eos_t>

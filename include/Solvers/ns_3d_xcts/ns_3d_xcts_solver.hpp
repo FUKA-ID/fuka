@@ -20,6 +20,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+/// \file
+/// \deprecated Superseded by FUKA_Solvers/NS_XCTS; kept until the remaining
+/// users (old binary solvers) are ported, then removed.
 #include <memory>
 #include "Solvers/sequences/ns_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
