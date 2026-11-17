@@ -20,7 +20,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "FUKA_Solvers/utilities/solver_startup.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_startup.hpp"
 #include "Solvers/bns_xcts/bns_xcts_driver.hpp"
 #include "Solvers/bns_xcts/bns_xcts_setup.hpp"
 #include "Solvers/bns_xcts/bns_xcts_solver.hpp"

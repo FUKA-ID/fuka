@@ -1,8 +1,8 @@
 #pragma once
 #include <array>
 #include <string>
-#include "FUKA_Solvers/utilities/compact_object_drivers/solve_BH_for_binary.hpp"
-#include "FUKA_Solvers/utilities/simple_calculations.hpp"
+#include "FUKA_Solvers/utilities/config/simple_calculations.hpp"
+#include "FUKA_Solvers/utilities/drivers/solve_BH_for_binary.hpp"
 #include "bbh_xcts_solver.hpp"
 #include "mpi.h"
 

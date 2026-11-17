@@ -23,7 +23,7 @@
 #include <math.h>
 #include <sstream>
 #include "Configurator/config_bco.hpp"
-#include "FUKA_Solvers/utilities/compact_object_initializers/setup_2dns_isotropic.hpp"
+#include "FUKA_Solvers/utilities/initializers/setup_2dns_isotropic.hpp"
 #include "bco_utilities.hpp"
 #include "kadath.hpp"
 

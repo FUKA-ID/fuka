@@ -1,6 +1,6 @@
 #pragma once
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_setup_from_iso.hpp"
 #include "FUKA_Solvers/NS_XCTS/utilities/boost/Boosted_NS_XCTS.hpp"
-#include "FUKA_Solvers/utilities/setup_xcts_from_iso.hpp"
 #include "NS_XCTS.hpp"
 #include "name_tools.hpp"
 

@@ -1,5 +1,5 @@
 #pragma once
-#include "FUKA_Solvers/utilities/fuka_path_tools.hpp"
+#include "FUKA_Solvers/utilities/solver/fuka_path_tools.hpp"
 #include "Solvers/bh_3d_xcts/bh_3d_xcts_driver.hpp"
 
 namespace Kadath::FUKA_Solvers {

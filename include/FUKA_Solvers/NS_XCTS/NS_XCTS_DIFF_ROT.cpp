@@ -1,5 +1,5 @@
-#include "FUKA_Solvers/utilities/format_settings.hpp"
-#include "FUKA_Solvers/utilities/solver_utilities.hpp"
+#include "FUKA_Solvers/utilities/solver/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_utilities.hpp"
 #include "Solvers/fuka_syst/fuka_syst_setup.hpp"
 
 namespace Kadath::FUKA_Solvers {

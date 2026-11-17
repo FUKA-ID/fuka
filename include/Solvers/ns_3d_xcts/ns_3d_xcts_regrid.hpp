@@ -23,7 +23,7 @@
 #include <math.h>
 #include <sstream>
 #include "Configurator/config_bco.hpp"
-#include "FUKA_Solvers/utilities/compact_object_initializers/setup_3dns_xcts.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_setup.hpp"
 #include "bco_utilities.hpp"
 #include "kadath.hpp"
 

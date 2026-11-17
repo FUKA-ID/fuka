@@ -20,7 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "FUKA_Solvers/NS_XCTS/NS_XCTS_driver.hpp"
-#include "FUKA_Solvers/utilities/solver_startup.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_startup.hpp"
 #include "Solvers/sequences/ns_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
 #include "Solvers/sequences/sequence_utilities.hpp"

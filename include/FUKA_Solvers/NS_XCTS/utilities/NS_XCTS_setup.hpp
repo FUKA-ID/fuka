@@ -1,10 +1,10 @@
 #pragma once
 #include "EOS/EOS.hh"
 #include "EOS/FUKA_EOS_Utilities.hh"
+#include "FUKA_Solvers/utilities/initializers/setup_interpolator_from_TOV.hpp"
+#include "FUKA_Solvers/utilities/initializers/setup_ns_config_from_TOV.hpp"
 #include "bco_utilities.hpp"
 #include "coord_fields.hpp"
-#include "setup_interpolator_from_TOV.hpp"
-#include "setup_ns_config_from_TOV.hpp"
 
 /**
  * \addtogroup Solver_utils

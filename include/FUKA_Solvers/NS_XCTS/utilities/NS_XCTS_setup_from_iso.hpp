@@ -1,8 +1,8 @@
 #pragma once
-#include "Solvers/ns_3d_xcts/NS_ISO_to_XCTS_convert.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_ISO_to_XCTS_convert.hpp"
+#include "FUKA_Solvers/utilities/solver/fuka_path_tools.hpp"
 #include "Solvers/ns_isotropic/ns_isotropic_driver.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
-#include "fuka_path_tools.hpp"
 
 namespace Kadath::FUKA_Solvers {
 using namespace Kadath::FUKA_EOS;

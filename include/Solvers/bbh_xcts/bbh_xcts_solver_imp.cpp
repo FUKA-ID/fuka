@@ -23,7 +23,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
-#include "FUKA_Solvers/utilities/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver/format_settings.hpp"
 #include "Solvers/bh_3d_xcts/bh_3d_xcts_solver.hpp"
 #include "bco_utilities.hpp"
 #include "mpi.h"

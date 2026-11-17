@@ -22,7 +22,7 @@
  */
 #include "FUKA_Solvers/BNS_XCTS/BNS_XCTS_driver.hpp"
 #include "FUKA_Solvers/BNS_XCTS/utilities/BNS_XCTS_setup.hpp"
-#include "FUKA_Solvers/utilities/solver_startup.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_startup.hpp"
 #include "Solvers/sequences/bco_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
 #include "Solvers/sequences/sequence_utilities.hpp"

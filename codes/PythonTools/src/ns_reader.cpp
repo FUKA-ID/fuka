@@ -23,7 +23,7 @@
 #include "Configurator/config_bco.hpp"
 #include "EOS/EOS.hh"
 #include "EOS/FUKA_EOS_Utilities.hh"
-#include "Solvers/ns_3d_xcts/ns_exporter.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_exporter.hpp"
 #include "bco_utilities.hpp"
 #include "coord_fields.hpp"
 #include "include/fuka_py.hpp"

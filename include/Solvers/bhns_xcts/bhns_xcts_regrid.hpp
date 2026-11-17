@@ -24,7 +24,7 @@
 #include <math.h>
 #include <sstream>
 #include "Configurator/config_binary.hpp"
-#include "FUKA_Solvers/utilities/scalar_calculations.hpp"
+#include "FUKA_Solvers/utilities/fields/scalar_calculations.hpp"
 #include "Solvers/fuka_syst/fuka_syst.hpp"
 #include "bco_utilities.hpp"
 #include "kadath.hpp"

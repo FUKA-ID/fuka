@@ -1,7 +1,7 @@
 #include <string>
 #include <vector>
-#include "FUKA_Solvers/utilities/config_utils.hpp"
-#include "FUKA_Solvers/utilities/scalar_calculations.hpp"
+#include "FUKA_Solvers/utilities/config/config_utils.hpp"
+#include "FUKA_Solvers/utilities/fields/scalar_calculations.hpp"
 #include "Solvers/fuka_syst/fuka_syst_tools.hpp"
 #include "kadath_bin_ns.hpp"
 

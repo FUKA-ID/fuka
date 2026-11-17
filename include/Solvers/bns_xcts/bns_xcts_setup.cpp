@@ -4,9 +4,9 @@
  * @{*/
 #pragma once
 #include "EOS/FUKA_EOS_Utilities.hh"
-#include "FUKA_Solvers/utilities/compact_object_drivers/solve_NS_for_binary_v1.hpp"
-#include "FUKA_Solvers/utilities/scalar_calculations.hpp"
-#include "FUKA_Solvers/utilities/simple_calculations.hpp"
+#include "FUKA_Solvers/utilities/config/simple_calculations.hpp"
+#include "FUKA_Solvers/utilities/drivers/solve_NS_for_binary_v1.hpp"
+#include "FUKA_Solvers/utilities/fields/scalar_calculations.hpp"
 
 namespace Kadath {
 namespace FUKA_Solvers {

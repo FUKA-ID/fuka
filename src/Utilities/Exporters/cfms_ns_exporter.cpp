@@ -1,5 +1,5 @@
 #include <EOS/FUKA_EOS_Utilities.hh>
-#include "Solvers/ns_3d_xcts/ns_exporter.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_exporter.hpp"
 
 namespace Kadath::FUKA_Solvers {
 #ifdef DEFAULT_KAD_MEM

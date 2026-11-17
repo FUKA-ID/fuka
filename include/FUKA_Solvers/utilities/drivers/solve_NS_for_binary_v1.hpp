@@ -1,20 +1,23 @@
 #pragma once
-#include "FUKA_Solvers/NS_XCTS/NS_XCTS_driver.hpp"
-#include "FUKA_Solvers/utilities/fuka_path_tools.hpp"
+#include "FUKA_Solvers/utilities/solver/fuka_path_tools.hpp"
+#include "Solvers/ns_3d_xcts/ns_3d_xcts_driver.hpp"
 
 /**
- * @brief Takes Binary config and computes the desired isolated NS
- * solution and boosts it to prepare for import into the binary
- * numerical space.
+ * \addtogroup Solver_utils
+ * \ingroup FUKA
+ * @{*/
+namespace Kadath::FUKA_Solvers {
+/**
+ * @brief
+ * -Solve TOV solution based on binary Configurator input
+ * -Update configurator based on TOV solution
  *
  * @tparam config_t: binary config type
- * @param bconfig: binary Configurator file
- * @param bco: Configurator index of NS parameters
- *
+ * @param[input] bconfig: binary Configurator file
+ * @param[return] TOV solution filename
  */
-namespace Kadath::FUKA_Solvers {
 template <typename config_t>
-std::string solve_NS_for_binary_v2(config_t& bconfig, const NODES bco) {
+std::string solve_NS_for_binary_v1(config_t& bconfig, const NODES bco) {
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     std::string output_path = (bconfig.control(CONTROLS::SAVE_COS))
@@ -44,9 +47,6 @@ std::string solve_NS_for_binary_v2(config_t& bconfig, const NODES bco) {
     for (int i = 0; i < SEQ_SETTINGS::NUM_SEQ_SETTINGS; ++i)
         nsconfig.seq_setting(i) = bconfig.seq_setting(i);
 
-    // for (int idx = 0; idx < DIFFROT_PARAMS::NUM_DIFFROT_PARAMS; ++idx)
-    //     nsconfig.set_diffrot(idx) = bconfig.set_diffrot(idx, bco);
-
     Parameter_sequence resolution("res", BCO_PARAMS::BCO_RES);
     resolution.set(9, 9, nsconfig(BCO_PARAMS::BCO_RES));
 
@@ -63,11 +63,11 @@ std::string solve_NS_for_binary_v2(config_t& bconfig, const NODES bco) {
     nsconfig(BCO_PARAMS::NSHELLS) =
         (bconfig.control(CONTROLS::CO_USE_SHELLS)) ? nshells : 0;
 
-    int err = NS_XCTS_binary_boost_driver(nsconfig,
-                                          resolution,
-                                          output_path,
-                                          bconfig,
-                                          bco);
+    int err = ns_3d_xcts_binary_boost_driver(nsconfig,
+                                             resolution,
+                                             output_path,
+                                             bconfig,
+                                             bco);
     MPI_Barrier(MPI_COMM_WORLD);
 
     // update binary parameters
@@ -79,4 +79,6 @@ std::string solve_NS_for_binary_v2(config_t& bconfig, const NODES bco) {
 
     return nsconfig.config_filename_abs();
 }
+
+/** @}*/
 }  // namespace Kadath::FUKA_Solvers

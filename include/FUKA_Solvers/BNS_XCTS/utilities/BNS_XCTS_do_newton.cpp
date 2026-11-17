@@ -1,4 +1,4 @@
-#include "FUKA_Solvers/utilities/solver_utilities.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_utilities.hpp"
 
 namespace Kadath::FUKA_Solvers {
 int BNS_XCTS_base::do_newton() {

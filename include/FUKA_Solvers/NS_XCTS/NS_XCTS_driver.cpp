@@ -1,5 +1,5 @@
-#include "FUKA_Solvers/utilities/compact_object_initializers/setup_3dns_xcts.hpp"
-#include "FUKA_Solvers/utilities/setup_xcts_from_iso.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_setup.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_setup_from_iso.hpp"
 #include "NS_XCTS.hpp"
 
 /**

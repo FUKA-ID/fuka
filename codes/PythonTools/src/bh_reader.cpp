@@ -20,7 +20,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "Solvers/bh_3d_xcts/bh_exporter.hpp"
+#include "FUKA_Solvers/BH_XCTS/utilities/BH_XCTS_exporter.hpp"
 #include "bco_utilities.hpp"
 #include "include/fuka_py.hpp"
 #include "kadath_adapted_bh.hpp"

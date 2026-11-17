@@ -1,8 +1,8 @@
-#include "FUKA_Solvers/utilities/compact_object_drivers/solve_BH_for_binary.hpp"
-#include "FUKA_Solvers/utilities/compact_object_drivers/solve_NS_for_binary_v2.hpp"
-#include "FUKA_Solvers/utilities/config_utils.hpp"
-#include "FUKA_Solvers/utilities/scalar_calculations.hpp"
-#include "FUKA_Solvers/utilities/simple_calculations.hpp"
+#include "FUKA_Solvers/utilities/config/config_utils.hpp"
+#include "FUKA_Solvers/utilities/config/simple_calculations.hpp"
+#include "FUKA_Solvers/utilities/drivers/solve_BH_for_binary.hpp"
+#include "FUKA_Solvers/utilities/drivers/solve_NS_for_binary_v2.hpp"
+#include "FUKA_Solvers/utilities/fields/scalar_calculations.hpp"
 #include "kadath_adapted_bh.hpp"
 /**
  * \addtogroup BNS_XCTS

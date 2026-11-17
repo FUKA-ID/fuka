@@ -34,8 +34,8 @@
 #include "kadath_adapted.hpp"
 #include "name_tools.hpp"
 
-#include "FUKA_Solvers/utilities/config_utils.hpp"
-#include "FUKA_Solvers/utilities/solver_utilities.hpp"
+#include "FUKA_Solvers/utilities/config/config_utils.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_utilities.hpp"
 
 #include "Solvers/sequences/parameter_sequence.hpp"
 

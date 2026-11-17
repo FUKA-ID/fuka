@@ -20,7 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
-#include "FUKA_Solvers/utilities/compact_object_initializers/setup_3dns_xcts.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_setup.hpp"
 #include "Solvers/sequences/ns_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"
 #include "Solvers/sequences/sequence_utilities.hpp"

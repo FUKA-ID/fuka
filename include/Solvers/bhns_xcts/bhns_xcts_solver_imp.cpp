@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "FUKA_Solvers/utilities/format_settings.hpp"
+#include "FUKA_Solvers/utilities/solver/format_settings.hpp"
 #include "bco_utilities.hpp"
 #include "kadath.hpp"
 #include "mpi.h"

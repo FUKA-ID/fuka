@@ -21,7 +21,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Configurator/config_bco.hpp"
-#include "Solvers/ns_3d_xcts/ns_exporter.hpp"
+#include "FUKA_Solvers/NS_XCTS/utilities/NS_XCTS_exporter.hpp"
 #include "kadath_adapted.hpp"
 
 #include "./reader_test_tools.hpp"

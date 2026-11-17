@@ -21,8 +21,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "EOS/FUKA_EOS_Utilities.hh"
-#include "FUKA_Solvers/utilities/solver_startup.hpp"
-#include "FUKA_Solvers/utilities/solver_utilities.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_startup.hpp"
+#include "FUKA_Solvers/utilities/solver/solver_utilities.hpp"
 #include "Solvers/ns_isotropic/ns_isotropic_driver.hpp"
 #include "Solvers/sequences/ns_sequence.hpp"
 #include "Solvers/sequences/parameter_sequence.hpp"

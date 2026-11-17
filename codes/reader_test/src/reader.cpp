@@ -21,7 +21,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Configurator/config_bco.hpp"
-#include "Solvers/bh_3d_xcts/bh_exporter.hpp"
+#include "FUKA_Solvers/BH_XCTS/utilities/BH_XCTS_exporter.hpp"
 #include "kadath_adapted.hpp"
 #include "kadath_adapted_bh.hpp"
 
