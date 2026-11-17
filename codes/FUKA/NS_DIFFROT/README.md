@@ -139,7 +139,6 @@ stages
 {
     differential_rotation on
     norot_bc on
-    total_bc on
     uniform_rotation on
 }
 ```
@@ -147,7 +146,7 @@ stages
 - `norot_bc`: the non-rotating (TOV) solution
 - `uniform_rotation`: a uniformly rotating solution fixed by `chi`
 - `differential_rotation`: a differentially rotating solution fixed by `R_ratio` and `A_ratio`
-- `total_bc`: the name of the uniformly rotating stage in the [NS solver](../NS/README.md); here it is the same as `uniform_rotation`
+- `total_bc`: accepted for configs from earlier versions and read as `uniform_rotation`
 
 The last enabled stage is the one that is solved for.
 

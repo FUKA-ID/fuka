@@ -38,10 +38,6 @@ std::string solve_NS_ISO_from_XCTS_config(config_t& bconfig,
     for (int i = 0; i < STAGES::NUM_STAGES; ++i) {
         nsconfig.set_stage(i) = bconfig.set_stage(i);
     }
-    nsconfig.set_stage(STAGES::UNIFORM_ROT) =
-        bconfig.set_stage(STAGES::TOTAL_BC) ||
-        bconfig.set_stage(STAGES::UNIFORM_ROT);
-    nsconfig.set_stage(STAGES::TOTAL_BC) = false;
 
     // Tells the NS driver to initialize the numerical space and fields
     nsconfig.control(CONTROLS::SEQUENCES) = true;

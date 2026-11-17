@@ -69,11 +69,6 @@ int main(int argc, char** argv) {
         bconfig.open_config();
         bconfig.control(CONTROLS::SEQUENCES) = InitSolver::setup_first;
         EOS_initialize::init(bconfig);
-        // the uniformly rotating stage is named total_bc in NS configs
-        if (bconfig.set_stage(STAGES::TOTAL_BC)) {
-            bconfig.set_stage(STAGES::TOTAL_BC) = false;
-            bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
-        }
 
         auto tree = bconfig.get_config_tree();
         auto N = number_of_sequences(tree, MBCO_PARAMS, "ns");

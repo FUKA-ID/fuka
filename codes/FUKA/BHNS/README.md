@@ -384,7 +384,7 @@ Once these estimates are computed an interface code is ran
 which
 
 - solves each component configuration in isolation.
-- obtains boosted isolated solutions using the estimated `global_omega`
+- obtains boosted isolated solutions using the estimated `global_omega` (each star with the [NS solver](../NS/README.md): `norot_bc`, `uniform_rotation`, then the boost)
 
 At this point, the binary numerical space and fields are constructed and the isolated
 solutions are interpolated onto

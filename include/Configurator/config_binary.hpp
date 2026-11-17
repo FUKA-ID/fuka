@@ -260,6 +260,11 @@ class BIN_INFO {
    */
     const auto& get_stage_map() const { return bin_stages; }
 
+    /* BIN_INFO::update_legacy_stages
+   * Binary stage names are current: nothing to map.
+   */
+    void update_legacy_stages(std::array<bool, NUM_STAGES>& /*stages*/) const {}
+
     void set_stage_map(const std::map<std::string, STAGES>& _stages) {
         bin_stages = _stages;
     }

@@ -77,10 +77,6 @@ int main(int argc, char** argv) {
         bconfig.open_config();
         EOS_initialize::init(bconfig);
         bconfig.control(CONTROLS::SEQUENCES) = InitSolver::setup_first;
-        if (bconfig.set_stage(STAGES::TOTAL_BC)) {
-            bconfig.set_stage(STAGES::TOTAL_BC) = false;
-            bconfig.set_stage(STAGES::UNIFORM_ROT) = true;
-        }
 
         Tree tree;
         pt::read_info(bconfig.config_filename_abs(), tree);

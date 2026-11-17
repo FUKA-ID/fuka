@@ -33,7 +33,7 @@ with ID that requires an EOS.
 
 We can deconstruct the name to make it understandable:
 
-- `NS_UNIFORM_ROT.` denotes a converged NS solution after the TOTAL_BC stage.
+- `NS_UNIFORM_ROT.` denotes a converged NS solution after the `UNIFORM_ROT` stage (`uniform_rotation` in the config).
         This is meant to distinguish the solution from other stages such as the NOROT_BC and boosted NS stage.
         This also distinguishes it from checkpoints that can be turned on which our saved to file during each iteration of the solver
 - `togashi` denotes the eosfile used in the ID construction
@@ -189,12 +189,13 @@ Within the full Config or the output solutions, `Fields` documents the fields th
 stages
 {
     norot_bc on
-    total_bc on
+    uniform_rotation on
 }
 ```
 
-For the isolated NS, only the `NOROT_BC` and `TOTAL_BC` stages are relevant.  These will be discussed in the
+For the isolated NS, only the `NOROT_BC` (`norot_bc`) and `UNIFORM_ROT` (`uniform_rotation`) stages are relevant.  These will be discussed in the
 sections below related to these stages.
+Configs and solutions from earlier versions that enable `total_bc` instead are still accepted: `total_bc` is read as `uniform_rotation`.
 Old stages available in the original v1 solver are since deprecated.
 
 ## Relevant Controls
@@ -246,16 +247,18 @@ Currently the default initial resolution is `res 9`.
     1. Iterative mass increase: in the event the desired mass is above Mtov 
         
         - the initial spinning solution is obtained using Mtov
-        - once the desired spin is obtained at Mtov, the mass is increased to the desired value and the `TOTAL_BC` stage is reran
+        - once the desired spin is obtained at Mtov, the mass is increased to the desired value and the `UNIFORM_ROT` stage is reran
 
     2. Iterative spin increase: the system of equations is sensitive to large changes in the spin, therefore, an automated iterative
-procedure is done to maximize the chance for convergence by solving for
+procedure is done to maximize the chance for convergence by increasing the spin in steps from a non-rotating star:
 
-        1. `chi = 0.1`
-        2. `chi = 0.6`
+        1. `chi = 0`
+        2. `chi = 0.2`
+        3. `chi = 0.4`
+        4. `chi = 0.6`
 
 3. Once the desired `chi` and `madm` is achieved, the solution is interpolated onto a new numerical grid with the desired final resolution
-4. With the high resolution initial guess, the `TOTAL_BC` stage is reran to obtain the desired ID
+4. With the high resolution initial guess, the `UNIFORM_ROT` stage is reran to obtain the desired ID
 5. This results in the converged dataset of `NS_UNIFORM_ROT.togashi.madm.2.3.chi.0.6.0.11.info/dat`, 
 however, the other implicit solutions have been saved as well.
 
@@ -267,26 +270,26 @@ We can of course verify that the ID matches our expectation using
 ```
                    RES = [+11,+11,+10]
             Coord R_IN = +2.18389
-               Coord R = [+4.35711, +6.15520]
-           Coord R_OUT = +9.25137
+               Coord R = [+4.35711, +6.15517]
+           Coord R_OUT = +9.97936
 
-               Areal R = +8.05304 [+11.89433km]
-     Circumferential R = +8.74700 [+12.91931km]
-         Mass Shedding = +0.37151
-         Baryonic Mass = +2.69496
+               Areal R = +8.05302 [+11.89431km]
+     Circumferential R = +8.74697 [+12.91927km]
+         Mass Shedding = +0.37152
+         Baryonic Mass = +2.69497
               ADM Mass = +2.30000 [+2.30000]
           ADM Momentum = +3.17400
                    Chi = +0.60000 [+0.60000]
                  Omega = +0.04272
-       Central Density = +1.93853e-03
-        Central log(h) = +4.41863e-01
-      Central Pressure = +7.27970e-04
-    Central dlog(h)/dx = -3.66766e-14
+       Central Density = +1.93854e-03
+        Central log(h) = +4.41866e-01
+      Central Pressure = +7.27979e-04
+    Central dlog(h)/dx = -1.13204e-14
 Central Euler Constant = -4.83910e-01
-     Integrated log(h) = +405.70467
+     Integrated log(h) = +405.70598
                   Beta = +0.08860
 
-                    Mk = +2.30035, Diff: +1.50999e-04
+                    Mk = +2.30035, Diff: +1.51127e-04
                     Px = +0.00000
                     Py = +0.00000
                     Pz = +0.00000
@@ -308,18 +311,18 @@ Once the 1D TOV solution is obtained, this solution is then interpolated onto th
 
 Now that the initial setup is complete, the first stage to run is the non-rotating stage.  In this stage, all equations related to the shift are not taken into account while the fluid and space-time are able to find an equilibrium solution.
 
-## TOTAL_BC Stage
+## UNIFORM_ROT Stage (`uniform_rotation`)
 
 With a stable solution to start from, a rotating solution is now found based on the `chi` fixing parameter.
 
 ### Automated iterative spin
 
-For highly spinning NS configurations it has been found to be most reliable to obtain a slowly spinning solution prior to a highly spinning one.  Therefore, an initial spin of `chi = +/- 0.1` is used before attempting higher spins.
+For highly spinning NS configurations it has been found to be most reliable to obtain a slowly spinning solution prior to a highly spinning one.  Therefore, for `|chi| >= 0.2` the spin is increased in three equal steps from a non-rotating star (e.g. `chi = 0, 0.2, 0.4, 0.6`).
 
 ### Automated iterative mass
 
 In the event the desired mass is above Mtov, the initial solution is constructed up to the desired `chi` using Mtov.  Once
-this solution has been obtained, the ADM mass is updated to the desired ADM mass and only the `TOTAL_BC` stage is reran
+this solution has been obtained, the ADM mass is updated to the desired ADM mass and only the `UNIFORM_ROT` stage is reran
 
 ### Automated resolution increase
 

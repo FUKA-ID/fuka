@@ -164,6 +164,15 @@ class BCO_INFO {
     }
 
     /**
+   * BCO_INFO::update_legacy_stages
+   * Map stage names of older configs to the current stages after reading.
+   *
+   * @param[inout] stages stage toggles read from the config
+   */
+    virtual void update_legacy_stages(
+        std::array<bool, NUM_STAGES>& /*stages*/) const {}
+
+    /**
    * BCO_INFO::operator()
    * Returns a given BCO parameter based on a given parameter
    * index contained in bco_map
@@ -348,6 +357,21 @@ class BCO_BH_INFO : public BCO_INFO {
 
 class BCO_NS_INFO : public BCO_INFO {
    public:
+    /**
+   * BCO_NS_INFO::update_legacy_stages
+   * Older NS configs name the uniformly rotating stage total_bc: it is read
+   * as uniform_rotation.
+   *
+   * @param[inout] stages stage toggles read from the config
+   */
+    void update_legacy_stages(
+        std::array<bool, NUM_STAGES>& stages) const override {
+        if (stages[STAGES::TOTAL_BC]) {
+            stages[STAGES::TOTAL_BC] = false;
+            stages[STAGES::UNIFORM_ROT] = true;
+        }
+    }
+
     using vars_t = std::variant<double, int, std::string>;
     using EOSArray = std::array<vars_t, NUM_BCO_PARAMS>;
     using EOSMap = std::map<std::string, EOS_PARAMS>;

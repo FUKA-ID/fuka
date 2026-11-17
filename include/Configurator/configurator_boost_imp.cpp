@@ -69,8 +69,10 @@ int kadath_config_boost<ParamC>::open_config() {
 
     if (tree.find("fields") != tree.not_found())
         read_keys(MBCO_FIELDS, fields, read_branch(tree, "fields"));
-    if (tree.find("stages") != tree.not_found())
+    if (tree.find("stages") != tree.not_found()) {
         read_keys(MSTAGE, stages, read_branch(tree, "stages"));
+        container.update_legacy_stages(stages);
+    }
     if (tree.find("sequence_controls") != tree.not_found())
         read_keys(MCONTROLS_READ,
                   controls,
