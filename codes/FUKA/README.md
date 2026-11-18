@@ -56,7 +56,7 @@ The solvers in `codes/FUKA`:
 | [BBH](BBH/README.md) | binary black hole |
 | [BNS](BNS/README.md) | binary neutron star |
 | [BHNS](BHNS/README.md) | black hole - neutron star binary |
-| `BNS_headon` (alpha) | head-on BNS and BHNS |
+| `BNS_headon` (alpha) | head-on BNS (stars from rest, BNS solver's `headon` stage) |
 
 The solvers are structured as follows:
 
@@ -67,7 +67,10 @@ The solvers are structured as follows:
         - `solve.cpp`: the one and done solve code for each solver
         - `reader.cpp`: the reader can provide diagnostics from ID solutions that are computed from the ID
 2. The related `solve.cpp` in most cases is simply a frontend with minimal functionality.  
-Most of the business is stored in `$HOME_KADATH/include/Solvers`
+Most of the business is stored in `$HOME_KADATH/include/FUKA_Solvers`: one directory per solver (`BH_XCTS`, `NS_XCTS`,
+`BBH_XCTS`, `BNS_XCTS`, `BHNS_XCTS`) and the code they share in `utilities/`.  `$HOME_KADATH/include/Solvers` holds the
+quasi-isotropic NS solver (`ns_isotropic`), shared sequence and system-of-equations tools, and the previous solver
+generation, which is deprecated and will be removed
 3. Each solver has its own `reader.cpp`
 
 # 4. Getting Started

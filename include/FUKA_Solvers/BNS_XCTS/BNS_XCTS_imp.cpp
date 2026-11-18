@@ -17,7 +17,7 @@ inline std::unique_ptr<BNS_XCTS_base::base_space_t> BNS_XCTS_base::read_space(
 
 inline std::string BNS_XCTS_base::converged_filename(
     const std::string stage) const {
-    return binary_converged_filename("BNS",
+    return matter_converged_filename("BNS",
                                      stage,
                                      bco2_seq->get_mass_fixing_val(),
                                      bco1_seq->get_mass_fixing_val());

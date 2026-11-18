@@ -38,15 +38,20 @@ struct launch_BNS_XCTS_solver {
                                outputdir,
                                rank);
 
+        // HEADON: regrid and re-solve at the initial resolution as for
+        // TOTAL (the previous solver went straight to the resolution steps)
+        constexpr bool headon_regrid_at_init_res = true;
+
         auto launch = [](auto& solver,
                          bool ignore_resinc = false,
-                         bool ignore_seq = false) {
+                         bool ignore_seq = false,
+                         bool regrid_at_init_res = true) {
             int exit_status = EXIT_SUCCESS;
             do {
                 // initial solution
                 solver.solve();
 
-                if (!ignore_resinc) {
+                if (!ignore_resinc && regrid_at_init_res) {
                     // Make sure final solution uses optimal domain decomposition
                     solver.regrid();
 
@@ -87,6 +92,12 @@ struct launch_BNS_XCTS_solver {
             solver.set_solver_stage() = STAGES::TOTAL_BC;
             solver.set_stagename() = "TOTAL_BC";
             launch(solver, false, true);
+        }
+
+        if (bconfig.set_stage(STAGES::HEADON)) {
+            solver.set_solver_stage() = STAGES::HEADON;
+            solver.set_stagename() = "HEAD_ON";
+            launch(solver, false, true, headon_regrid_at_init_res);
         }
 
         if (bconfig.set_stage(STAGES::ECC_RED)) {

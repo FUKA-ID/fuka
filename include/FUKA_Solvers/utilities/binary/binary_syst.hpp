@@ -236,6 +236,31 @@ inline void add_velocity_potential_eqs(System_of_eqs& syst,
     syst.add_eq_vel_pot(adapted, 2, "eqphi = 0", "phi=0");
 }
 
+/**
+ * @brief Apparent-horizon conditions of one excised hole: lapse condition,
+ * vanishing expansion for the conformal factor, and the
+ * horizon area fixed by the irreducible mass.
+ *
+ * @param add_bc adds a boundary condition on the hole's excision surface
+ * @param add_int adds an integral condition on that surface
+ * @param s name of the surface normal (sm, sp)
+ * @param lapse_bc lapse condition
+ * @param mirr_eq irreducible-mass integral condition
+ */
+template <class add_bc_f, class add_int_f>
+void add_apparent_horizon(add_bc_f&& add_bc,
+                          add_int_f&& add_int,
+                          std::string const& s,
+                          std::string const& lapse_bc,
+                          std::string const& mirr_eq) {
+    add_bc(lapse_bc.c_str());
+    std::string const expansion{s + "^j * D_j P + P / 4 * D^j " + s +
+                                "_j + A_ij * " + s + "^i * " + s +
+                                "^j / P^3 / 4 = 0"};
+    add_bc(expansion.c_str());
+    add_int(mirr_eq.c_str());
+}
+
 /// Metric equations with continuity of their normal derivatives, and
 /// asymptotic flatness at infinity.
 template <class space_t>

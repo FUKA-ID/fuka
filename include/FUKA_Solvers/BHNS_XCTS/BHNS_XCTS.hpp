@@ -30,8 +30,9 @@ using namespace ::Kadath::FUKA_Config;
  * by the BHNS stages. The neutron star is companion 1, the black hole
  * companion 2.
  */
-struct BHNS_XCTS_base : public FUKA_XCTS_Binary_base<Kadath::Space_bhns> {
-    using binary_base_t = FUKA_XCTS_Binary_base<Kadath::Space_bhns>;
+struct BHNS_XCTS_base
+    : public FUKA_XCTS_Binary_matter_base<Kadath::Space_bhns> {
+    using binary_base_t = FUKA_XCTS_Binary_matter_base<Kadath::Space_bhns>;
 
    protected:
     /// Residual scaling factor of the enthalpy (hydro-rescaling stages).

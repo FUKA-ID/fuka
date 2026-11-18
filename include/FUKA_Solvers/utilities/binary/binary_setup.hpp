@@ -199,14 +199,18 @@ struct Isolated_BH {
         return *std::static_pointer_cast<Space_adapted_bh>(sol.space_owner);
     }
 
-    /// Extend the conformal factor and lapse from the horizon shell into the
-    /// excised domain, so the interpolation near the horizon is smooth.
-    void extend_into_excision() {
+    /// Extend the conformal factor and lapse (and the shift, if requested)
+    /// from the horizon shell into the excised domain, so the interpolation
+    /// near the horizon is smooth.
+    void extend_into_excision(bool const with_shift = false) {
         using namespace ::Kadath::bco_utils;
         auto const* outer = dynamic_cast<const Domain_shell_outer_homothetic*>(
             space().get_domain(1));
         update_adapted_field(*sol.conf, 2, 1, outer, OUTER_BC);
         update_adapted_field(*sol.lapse, 2, 1, outer, OUTER_BC);
+        if (with_shift)
+            for (int i = 1; i <= 3; ++i)
+                update_adapted_field(sol.shift->set(i), 2, 1, outer, OUTER_BC);
     }
 };
 

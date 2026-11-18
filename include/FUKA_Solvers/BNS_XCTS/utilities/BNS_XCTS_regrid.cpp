@@ -8,10 +8,10 @@
 
 namespace Kadath::FUKA_Solvers {
 bool BNS_XCTS_base::increment_resolution() {
-    // Currently TOTAL is the only stage that computes solutions in
-    // hydrostratic equilibrium
+    // the resolution is raised in hydrostatic equilibrium (TOTAL), or for a
+    // head-on collision (HEADON, the only stage then)
     if (!(resolution->final() > resolution->init()) ||
-        solver_stage != STAGES::TOTAL)
+        (solver_stage != STAGES::TOTAL && solver_stage != STAGES::HEADON))
         return false;
 
     auto resolution_indices = resolution->get_indices();

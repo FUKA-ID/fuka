@@ -11,7 +11,7 @@ inline BHNS_XCTS_base::BHNS_XCTS_base(base_config_t* config_,
 
 inline std::string BHNS_XCTS_base::converged_filename(
     const std::string stage) const {
-    return binary_converged_filename("BHNS",
+    return matter_converged_filename("BHNS",
                                      stage,
                                      (*bconfig)(BCO_PARAMS::MADM, NODES::BCO1),
                                      (*bconfig)(BCO_PARAMS::MCH, NODES::BCO2));
@@ -57,11 +57,12 @@ inline void BHNS_XCTS_base::add_spin_equations() {
 }
 
 inline void BHNS_XCTS_base::add_horizon_equations() {
-    space->add_bc_sphere_two(*syst, "sp^j * D_j NP = 0");
-    space->add_bc_sphere_two(
-        *syst,
-        "sp^j * D_j P + P / 4 * D^j sp_j + A_ij * sp^i * sp^j / P^3 / 4 = 0");
-    space->add_eq_int_BH(*syst, "integ(intMsq) - Mirr * Mirr = 0 ");
+    binary_syst::add_apparent_horizon(
+        [&](char const* eq) { space->add_bc_sphere_two(*syst, eq); },
+        [&](char const* eq) { space->add_eq_int_BH(*syst, eq); },
+        "sp",
+        "sp^j * D_j NP = 0",
+        "integ(intMsq) - Mirr * Mirr = 0 ");
 
     for (int d : excluded_doms()) {
         syst->add_eq_full(d, "N = 0");

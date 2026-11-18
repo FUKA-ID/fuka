@@ -23,8 +23,9 @@
 namespace Kadath::FUKA_Solvers {
 using namespace ::Kadath::FUKA_Config;
 
-struct BNS_XCTS_base : public FUKA_XCTS_Binary_base<Kadath::Space_bin_ns> {
-    using binary_base_t = FUKA_XCTS_Binary_base<Kadath::Space_bin_ns>;
+struct BNS_XCTS_base
+    : public FUKA_XCTS_Binary_matter_base<Kadath::Space_bin_ns> {
+    using binary_base_t = FUKA_XCTS_Binary_matter_base<Kadath::Space_bin_ns>;
 
    protected:
     // Residual scaling factors of the enthalpy (hydro-rescaling stages)
@@ -75,10 +76,34 @@ struct BNS_XCTS : public BNS_XCTS_base {
     void setup_hydro_rescaling_syst();
     void setup_hydrostatic_equilibrium_stage();
 
+   protected:
+    /// HEADON (no hydrostatic stage before it): the stars' radii, central
+    /// enthalpy and density, and quasi-local masses follow the rescaled
+    /// solution, as in the previous head-on solver.
+    void update_config_quantities() override {
+        if (solver_stage != STAGES::HEADON)
+            return;
+        for (auto const bco : {NODES::BCO1, NODES::BCO2}) {
+            int const nuc = bco == NODES::BCO1 ? space->NS1 : space->NS2;
+            int const adapted = bco == NODES::BCO1 ? space->ADAPTED1
+                                                   : space->ADAPTED2;
+            bconfig->set(BCO_PARAMS::RMID, bco) =
+                bco_utils::get_rmin_rmax(*space, adapted)[1];
+            bconfig->set(BCO_PARAMS::HC, bco) =
+                std::exp(bco_utils::get_boundary_val(nuc, *logh, INNER_BC));
+            bconfig->set(BCO_PARAMS::NC, bco) =
+                EOS<eos_t, DENSITY>::get((*bconfig)(BCO_PARAMS::HC, bco));
+            double ql_mass = 0.;
+            for (int d = nuc; d <= adapted; ++d)
+                ql_mass += syst->give_val_def("intM")()(d).integ_volume();
+            bconfig->set(BCO_PARAMS::QLMADM, bco) = ql_mass;
+        }
+    }
+
    public:
     void setup_syst() override {
         if (solver_stage == STAGES::PRE || solver_stage == STAGES::TOTAL_BC ||
-            solver_stage == STAGES::ECC_RED) {
+            solver_stage == STAGES::HEADON || solver_stage == STAGES::ECC_RED) {
             setup_hydro_rescaling_syst();
         } else if (solver_stage == STAGES::TOTAL) {
             setup_hydrostatic_equilibrium_stage();

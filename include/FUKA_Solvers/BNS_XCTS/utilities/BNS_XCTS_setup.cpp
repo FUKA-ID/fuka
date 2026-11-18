@@ -131,8 +131,8 @@ struct BNS_XCTS_setup_boosted_3d {
         }
         f.std_base();
 
-        // Ensure preconditioning stage is ran
-        bconfig.set_stage(STAGES::PRE) = true;
+        // the preconditioning stage starts an inspiral from the initial guess
+        bconfig.set_stage(STAGES::PRE) = !bconfig.set_stage(STAGES::HEADON);
 
         save_to_file(space, bconfig, f.conf, f.lapse, f.shift, f.logh, f.phi);
     }

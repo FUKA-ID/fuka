@@ -22,7 +22,7 @@
  */
 #include <string>
 #include "Configurator/config_binary.hpp"
-#include "Solvers/bbh_xcts/bbh_exporter.hpp"
+#include "FUKA_Solvers/BBH_XCTS/utilities/BBH_XCTS_exporter.hpp"
 #include "bco_utilities.hpp"
 #include "coord_fields.hpp"
 #include "include/fuka_py.hpp"

@@ -1,4 +1,7 @@
 #pragma once
+/// \file
+/// \deprecated Superseded by FUKA_Solvers/BBH_XCTS; kept until it is
+/// removed.
 #include <array>
 #include <string>
 #include "bbh_xcts_solver.hpp"

@@ -20,6 +20,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+/// \file
+/// \deprecated Superseded by FUKA_Solvers/BNS_XCTS; kept until it is
+/// removed.
 #include "Solvers/solvers.hpp"
 #include "kadath_bin_ns.hpp"
 

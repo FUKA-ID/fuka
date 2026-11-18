@@ -1,7 +1,7 @@
 /**
  * @file FUKA_XCTS_Binary_base.hpp
- * @brief State and I/O shared by the binary XCTS solvers with at least one
- * neutron star (BNS, BHNS).
+ * @brief State and I/O shared by the binary XCTS solvers: the metric part
+ * (BBH, BNS, BHNS) and the matter part (BNS, BHNS).
  *
  * @copyright Copyright (c) 2026, GNU General Public Licensev3
  * This file is part of the KADATH library and published under
@@ -27,15 +27,12 @@
 namespace Kadath::FUKA_Solvers {
 
 /**
- * @brief Binary solution with matter: conformal factor, lapse, shift,
- * logarithmic enthalpy and velocity potential on a binary space, the two
- * companions' sequences, the resolution sequence, and the binary
- * coordinate-field update.
+ * @brief Binary solution: conformal factor, lapse and shift on a binary
+ * space, the two companions' sequences, the resolution sequence, and the
+ * binary coordinate-field update. The solution file starts with (space, P,
+ * N, beta); solvers with matter append their fields (load_matter_fields).
  *
- * The solution file layout (space, P, N, beta, log h, phi) is shared by BNS
- * and BHNS.
- *
- * @tparam space_t binary space (Space_bin_ns, Space_bhns)
+ * @tparam space_t binary space (Space_bin_bh, Space_bin_ns, Space_bhns)
  */
 template <class space_t>
 struct FUKA_XCTS_Binary_base
@@ -61,11 +58,6 @@ struct FUKA_XCTS_Binary_base
     using solver_base_t::space;
     using solver_base_t::syst;
 
-    // EOS parameters
-    internal_variable(double, h_cut);
-    internal_variable(std::string, eos_file);
-    internal_variable(std::string, eos_type);
-
     // Sequences of the two companions and of the resolution
     ptr_data_member(bco_seq_t const, bco1_seq, unique);
     ptr_data_member(bco_seq_t const, bco2_seq, unique);
@@ -75,15 +67,6 @@ struct FUKA_XCTS_Binary_base
     ptr_data_member(Scalar, conformal_factor, unique);
     ptr_data_member(Scalar, lapse, unique);
     ptr_data_member(Vector, shift, unique);
-    ptr_data_member(Scalar, logh, unique);
-    ptr_data_member(Scalar, phi, unique);
-
-    /// Parameter of the EOS operators; System_of_eqs::add_ope keeps a
-    /// pointer, so it lives as long as the solver.
-    Param eos_param;
-
-    /// Unscaled enthalpy of the hydro-rescaling stages (system constant).
-    ptr_data_member(Scalar, logh_const, unique);
 
     // x-coordinates of the companions' centers and of the outer domains
     internal_variable(double, xc1);
@@ -132,22 +115,17 @@ struct FUKA_XCTS_Binary_base
         xo = bco_utils::get_center(*space, ndom - 1);
     }
 
-    void reset_support_containers() override {
-        // refers to the space, rebuilt by the hydro-rescaling setup
-        logh_const.reset(nullptr);
-        solver_base_t::reset_support_containers();
-    }
-
     void save_solution_to_file() const override {
         bconfig->set_outputdir(outputdir);
         Kadath::bco_utils::save_to_file(*space,
                                         *bconfig,
                                         *conformal_factor,
                                         *lapse,
-                                        *shift,
-                                        *logh,
-                                        *phi);
+                                        *shift);
     }
+
+    /// Read the fields stored after (P, N, beta).
+    virtual void load_matter_fields(FILE* /*ff*/) {}
 
     void load_solution_from_file() override {
         std::string const spacein{bconfig->space_filename()};
@@ -159,23 +137,14 @@ struct FUKA_XCTS_Binary_base
         conformal_factor = std::make_unique<Scalar>(*space, ff1);
         lapse = std::make_unique<Scalar>(*space, ff1);
         shift = std::make_unique<Vector>(*space, ff1);
-        logh = std::make_unique<Scalar>(*space, ff1);
-        phi = std::make_unique<Scalar>(*space, ff1);
+        load_matter_fields(ff1);
         fclose(ff1);
 
         conformal_factor->coef();
         lapse->coef();
         shift->coef();
-        logh->coef();
-        phi->coef();
 
         ndom = space->get_nbr_domains();
-    }
-
-    /// The hydro-rescaling stages solve for a rescaled enthalpy H: keep it.
-    void post_newton_step() override {
-        if (logh_const)
-            *logh = syst->give_val_def("H");
     }
 
     void update_coordinate_fields() override {
@@ -196,20 +165,21 @@ struct FUKA_XCTS_Binary_base
     }
 
     /**
-     * @brief Converged filename `<prefix>[_<stage>].<eos>.<dist>.<chi1>.
+     * @brief Converged filename `<prefix>[_<stage>].[<eos>.]<dist>.<chi1>.
      * <chi2>.<Mtot>.q<q>.<nshells1>.<nshells2>.<res>`; sets Q in the config.
      *
-     * @param prefix solver prefix (BNS, BHNS)
+     * @param prefix solver prefix (BBH, BNS, BHNS)
      * @param stage stage name
      * @param M1 mass of the first companion
      * @param M2 mass of the second companion
+     * @param eosname EOS name, omitted if empty
      */
     std::string binary_converged_filename(std::string const& prefix,
                                           std::string const& stage,
                                           double M1,
-                                          double M2) const {
+                                          double M2,
+                                          std::string const& eosname) const {
         auto const res = space->get_domain(0)->get_nbr_points()(0);
-        std::string const eosname{extract_eos_name(*bconfig, NODES::BCO1)};
         if (M2 > M1)
             std::swap(M1, M2);
         bconfig->set(BIN_PARAMS::Q) = M2 / M1;
@@ -221,9 +191,10 @@ struct FUKA_XCTS_Binary_base
             ss << "_" << stage << ".";
         else
             ss << ".";
-        ss << eosname << "." << cfg(BIN_PARAMS::DIST) << "."
-           << cfg(BCO_PARAMS::CHI, NODES::BCO1) << "."
-           << cfg(BCO_PARAMS::CHI, NODES::BCO2) << "." << M1 + M2 << ".q"
+        if (!eosname.empty())
+            ss << eosname << ".";
+        ss << cfg(BIN_PARAMS::DIST) << "." << cfg(BCO_PARAMS::CHI, NODES::BCO1)
+           << "." << cfg(BCO_PARAMS::CHI, NODES::BCO2) << "." << M1 + M2 << ".q"
            << cfg(BIN_PARAMS::Q) << "." << std::setfill('0') << std::setw(1)
            << cfg(BCO_PARAMS::NSHELLS, NODES::BCO1) << "." << std::setfill('0')
            << std::setw(1) << cfg(BCO_PARAMS::NSHELLS, NODES::BCO2) << "."
@@ -238,21 +209,120 @@ struct FUKA_XCTS_Binary_base
                                &FUKA_XCTS_Binary_base::bconfig,
                                &FUKA_XCTS_Binary_base::conformal_factor,
                                &FUKA_XCTS_Binary_base::lapse,
-                               &FUKA_XCTS_Binary_base::shift,
-                               &FUKA_XCTS_Binary_base::logh,
-                               &FUKA_XCTS_Binary_base::phi);
+                               &FUKA_XCTS_Binary_base::shift);
     }
 
     void reset_all_ptrs() override {
-        reset_support_containers();
+        this->reset_support_containers();
 
         conformal_factor.reset(nullptr);
         lapse.reset(nullptr);
         shift.reset(nullptr);
-        logh.reset(nullptr);
-        phi.reset(nullptr);
 
         space.reset(nullptr);
+    }
+};
+
+/**
+ * @brief Binary solution with neutron-star matter: logarithmic enthalpy and
+ * velocity potential after (P, N, beta) in the solution file, the EOS
+ * operators' parameter, and the enthalpy rescaling of the hydro-rescaling
+ * stages.
+ *
+ * @tparam space_t binary space (Space_bin_ns, Space_bhns)
+ */
+template <class space_t>
+struct FUKA_XCTS_Binary_matter_base : public FUKA_XCTS_Binary_base<space_t> {
+    using binary_base_t = FUKA_XCTS_Binary_base<space_t>;
+    using typename binary_base_t::base_config_t;
+    using typename binary_base_t::bco_seq_t;
+    using typename binary_base_t::bin_res_seq_t;
+
+   protected:
+    using binary_base_t::bconfig;
+    using binary_base_t::conformal_factor;
+    using binary_base_t::lapse;
+    using binary_base_t::outputdir;
+    using binary_base_t::shift;
+    using binary_base_t::space;
+    using binary_base_t::syst;
+
+    // EOS parameters
+    internal_variable(double, h_cut);
+    internal_variable(std::string, eos_file);
+    internal_variable(std::string, eos_type);
+
+    ptr_data_member(Scalar, logh, unique);
+    ptr_data_member(Scalar, phi, unique);
+
+    /// Parameter of the EOS operators; System_of_eqs::add_ope keeps a
+    /// pointer, so it lives as long as the solver.
+    Param eos_param;
+
+    /// Unscaled enthalpy of the hydro-rescaling stages (system constant).
+    ptr_data_member(Scalar, logh_const, unique);
+
+   protected:
+    using binary_base_t::binary_base_t;
+
+    void reset_support_containers() override {
+        // refers to the space, rebuilt by the hydro-rescaling setup
+        logh_const.reset(nullptr);
+        binary_base_t::reset_support_containers();
+    }
+
+    void save_solution_to_file() const override {
+        bconfig->set_outputdir(outputdir);
+        Kadath::bco_utils::save_to_file(*space,
+                                        *bconfig,
+                                        *conformal_factor,
+                                        *lapse,
+                                        *shift,
+                                        *logh,
+                                        *phi);
+    }
+
+    void load_matter_fields(FILE* ff) override {
+        logh = std::make_unique<Scalar>(*space, ff);
+        phi = std::make_unique<Scalar>(*space, ff);
+        logh->coef();
+        phi->coef();
+    }
+
+    /// The hydro-rescaling stages solve for a rescaled enthalpy H: keep it.
+    void post_newton_step() override {
+        if (logh_const)
+            *logh = syst->give_val_def("H");
+    }
+
+    /// Converged filename with the EOS name of the first companion.
+    std::string matter_converged_filename(std::string const& prefix,
+                                          std::string const& stage,
+                                          double const M1,
+                                          double const M2) const {
+        return this->binary_converged_filename(prefix,
+                                               stage,
+                                               M1,
+                                               M2,
+                                               extract_eos_name(*bconfig,
+                                                                NODES::BCO1));
+    }
+
+   public:
+    /// Members a revert needs (Solution_snapshot).
+    static constexpr auto snapshot_members() {
+        return std::tuple_cat(
+            binary_base_t::snapshot_members(),
+            std::make_tuple(&FUKA_XCTS_Binary_matter_base::logh,
+                            &FUKA_XCTS_Binary_matter_base::phi));
+    }
+
+    void reset_all_ptrs() override {
+        // the system refers to the fields: release it first
+        reset_support_containers();
+        logh.reset(nullptr);
+        phi.reset(nullptr);
+        binary_base_t::reset_all_ptrs();
     }
 };
 

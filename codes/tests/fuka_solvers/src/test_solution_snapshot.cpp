@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "FUKA_Solvers/BBH_XCTS/BBH_XCTS.hpp"
 #include "FUKA_Solvers/BHNS_XCTS/BHNS_XCTS.hpp"
 #include "FUKA_Solvers/BH_XCTS/BH_XCTS_driver.hpp"
 #include "FUKA_Solvers/BNS_XCTS/BNS_XCTS.hpp"
@@ -23,7 +24,7 @@ using namespace Kadath::FUKA_Config;
 using namespace Kadath::FUKA_Solvers;
 
 namespace {
-// compile check of the NS, BNS and BHNS member lists (moved unique_ptr, copied config)
+// compile check of the NS, BNS, BHNS and BBH member lists (moved unique_ptr, copied config)
 using table_eos_t =
     FUKA_EOS::FUKA_EOS_Wrapper<FUKA_EOS::fuka_eos_t, FUKA_EOS::margherita_1d>;
 }  // namespace
@@ -33,6 +34,7 @@ template class Kadath::FUKA_Solvers::Solution_snapshot<
     Boosted_NS_XCTS<table_eos_t>>;
 template class Kadath::FUKA_Solvers::Solution_snapshot<BNS_XCTS<table_eos_t>>;
 template class Kadath::FUKA_Solvers::Solution_snapshot<BHNS_XCTS<table_eos_t>>;
+template class Kadath::FUKA_Solvers::Solution_snapshot<BBH_XCTS>;
 
 namespace {
 int failures = 0;
